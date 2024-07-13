@@ -4,11 +4,11 @@ $assets_url = plugins_url('assets/user-cart.svg', dirname(__FILE__));
 $globalVarIconPostType = $assets_url;
 
 
-
 // Register subscriptions Post Type
 function subscriptions_post_type()
 {
     global $globalVarIconPostType;
+    generate_secret_code(16);
 
     $labels = array(
         'name' => _x('اشتراک‌ها', 'Post Type General Name', 'i8_publisher_copilot'),
@@ -80,50 +80,53 @@ function display_subscriptions_custom_meta_box($post)
     $subscription_site_url = get_post_meta($post->ID, 'subscription_site_url', true);
     $subscription_plan_id = get_post_meta($post->ID, 'subscription_plan_id', true);
     $subscription_resources_ids = get_post_meta($post->ID, 'subscription_resources_ids', true);
-    // $subscription_max_post_fetch = get_post_meta($post->ID, 'subscription_extra_day', true);
+    $subscription_secret_code = get_post_meta($post->ID, 'subscription_secret_code', true);
     // $subscription_max_post_fetch = get_post_meta($post->ID, 'subscription_status', true);
-    // $subscription_max_post_fetch = get_post_meta($post->ID, 'subscription_resources', true);
     ?>
     <style>
         .form-flex-container {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+           
         }
 
         .half-width {
-            flex: 0 0 50%;
+            flex: 0 0 49%;
         }
 
         .full-width {
-            flex: 0 0 100%;
+            flex: 0 0 99%;
         }
 
         .third-width {
-            flex: 0 0 33.33%;
+            flex: 0 0 32.33%;
         }
     </style>
 
-    <div class="form-container form-flex-container">
+    <div class="form-container form-flex-container" style="display: flex;flex-wrap: wrap;gap:1%;row-gap:20px;padding: 20px 0px;">
 
-        <div class="full-width">
+        <div class="third-width">
             <label for="subscription_user_id" class="form-label">کاربر : </label><br>
-            <?php cop_list_users_dropdown('subscription_user_id', 'subscription_user_id form-field form-input' , 'subscription_user_id' , $subscription_user_id); ?>
+            <?php cop_list_users_dropdown('subscription_user_id', 'subscription_user_id form-field form-input', 'subscription_user_id', $subscription_user_id); ?>
         </div>
-        <div class="full-width">
+        <div class="third-width">
             <label for="subscription_site_url" class="form-label">آدرس سایت : </label><br>
-            <input type="url" id="subscription_site_url" name="subscription_site_url" class="form-field form-input " placeholder="https://example.com"
-            value="<?php echo esc_attr($subscription_site_url); ?>">
+            <input type="url" id="subscription_site_url" name="subscription_site_url" class="form-field form-input "
+                placeholder="https://example.com" value="<?php echo esc_attr($subscription_site_url); ?>">
         </div>
-        <div class="full-width">
+        <div class="third-width">
             <label for="subscription_plan_id" class="form-label">پلن : </label><br>
-            <?php cop_plans_list_dropdown('subscription_plan_id', 'subscription_plan_id form-field form-input' , 'subscription_plan_id' , $subscription_plan_id); ?>
+            <?php cop_plans_list_dropdown('subscription_plan_id', 'subscription_plan_id form-field form-input', 'subscription_plan_id', $subscription_plan_id); ?>
         </div>
         <div class="full-width">
             <label for="subscription_resources_ids" class="form-label">منابع : </label><br>
-            <?php cop_resources_list_dropdown('subscription_resources_ids', 'subscription_resources_ids form-field form-input' , 'subscription_resources_ids' , (array)$subscription_resources_ids); ?>
+            <?php cop_resources_list_dropdown('subscription_resources_ids', 'subscription_resources_ids form-field form-input', 'subscription_resources_ids', (array) $subscription_resources_ids); ?>
         </div>
-
+        <div class="full-width">
+            <label for="subscription_secret_code" class="form-label">لایسنس کد اختصاصی : </label><br>
+            <input type="text" id="subscription_secret_code" name="subscription_secret_code"
+                class="form-field form-input widefat " readonly value="<?php echo esc_attr($subscription_secret_code); ?>" style="direction:ltr;text-align:left;font-size:18px; height:20px;">
+        </div>
     </div>
     <?php
 }
@@ -137,7 +140,7 @@ function save_subscriptions_custom_meta_box($post_id)
         update_post_meta($post_id, 'subscription_user_id', sanitize_text_field($_POST['subscription_user_id']));
     }
     if (isset($_POST['subscription_site_url'])) {
-        update_post_meta($post_id, 'subscription_site_url', esc_url($_POST['subscription_site_url']));
+        update_post_meta($post_id, 'subscription_site_url', $_POST['subscription_site_url']);
     }
     if (isset($_POST['subscription_plan_id'])) {
         update_post_meta($post_id, 'subscription_plan_id', sanitize_text_field($_POST['subscription_plan_id']));
@@ -146,5 +149,10 @@ function save_subscriptions_custom_meta_box($post_id)
         $resources_ids = array_map('intval', $_POST['subscription_resources_ids']);
         update_post_meta($post_id, 'subscription_resources_ids', $resources_ids);
     }
+    if (!isset($_POST['subscription_secret_code']) && (get_post_meta($post_id, 'subscription_secret_code', true) == '')) {
+        $seceret_code = generate_secret_code();
+        update_post_meta($post_id, 'subscription_secret_code', sanitize_text_field($seceret_code));
+    }
+
 }
 add_action('save_post', 'save_subscriptions_custom_meta_box');

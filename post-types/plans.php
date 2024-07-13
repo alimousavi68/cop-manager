@@ -44,18 +44,22 @@ function plans_post_type()
         'description' => __('پلن ها', 'i8_publisher_copilot'),
         'labels' => $labels,
         'supports' => array('title', 'custom-fields'),
-        'public' => true,
-        'show_ui' => true,
-        'show_in_menu' => true,
         'menu_position' => 6,
         'menu_icon' => $globalVarIconPostType_subscriptions,
         'show_in_admin_bar' => true,
         'show_in_nav_menus' => true,
         'can_export' => true,
-        'has_archive' => true,
         'exclude_from_search' => true,
-        'publicly_queryable' => true,
         'capability_type' => 'page',
+        'public'             => false,  // این باعث می‌شود که پست‌ها در فرانت سایت نمایش داده نشوند
+        'publicly_queryable' => false,  // این گزینه جلوی دسترسی عمومی به این نوع پست را می‌گیرد
+        'show_ui'            => true,   // نمایش در بخش مدیریت
+        'show_in_menu'       => true,   // نمایش در منوی مدیریت
+        'query_var'          => false,  // جلوگیری از استفاده از query vars برای دسترسی به پست‌ها
+        'rewrite'            => false,  // غیرفعال کردن rewrite rules
+        'has_archive'        => false,  // غیرفعال کردن بایگانی برای این نوع پست
+        'exclude_from_search' => true  // این پست‌ها در جستجوهای سایت نمایش داده نمی‌شوند
+
     );
     register_post_type('plans', $args);
 }
@@ -120,8 +124,8 @@ function display_plans_custom_meta_box($post)
 
         <div class="full-width">
             <label for="title_selector" class="form-label"> ماکزیمم انتشار روزانه : </label><br>
-            <input type="number" id="plan_duration" name="plan_duration" class="form-field form-input"
-                value="<?php echo esc_attr($plan_duration); ?>">
+            <input type="number" id="plan_max_post_fetch" name="plan_max_post_fetch" class="form-field form-input"
+                value="<?php echo esc_attr($plan_max_post_fetch); ?>">
         </div>
     </div>
     <?php

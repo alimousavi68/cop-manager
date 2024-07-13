@@ -13,62 +13,43 @@ add_action('rest_api_init', function () {
 
 function validate_license(WP_REST_Request $request)
 {
-    $domain = $request->get_param('domain');
-    $license_code = $request->get_param('license_code');
+    $subscription_secret_code = $request->get_param('subscription_secret_code');
+    $subscription_site_url = $_SERVER['HTTP_HOST'];
 
     // بررسی اعتبار لایسنس
-    if ($response = check_license($domain, $license_code)) {
-        return new WP_REST_Response( $response , 200);
+    if ($response_subscription_id = check_subscription_existence($subscription_site_url, $subscription_secret_code)) {
+        $subscription_data = get_subscription_data($response_subscription_id);
+        if ($subscription_data) {
+            $subscription_plan_id = $subscription_data['subscription_plan_id'];
+            $subscription_start_date = $subscription_data['subscription_start_date'];
+            $subscription_resources_ids = $subscription_data['subscription_resources_ids'];
+            // $subscription_user_id = $subscription_data['subscription_user_id'];
+            // $subscription_site_url = $subscription_data['subscription_site_url'];
+            // $subscription_secret_code = $subscription_data['subscription_secret_code'];
+
+            $plan_data = get_plan_data($subscription_plan_id);
+            if ($plan_data) {
+                $plan_name = $plan_data['plan_name'];
+                $plan_duration = $plan_data['plan_duration'];
+                $plan_cron_interval = $plan_data['plan_cron_interval'];
+                $plan_max_post_fetch = $plan_data['plan_max_post_fetch'];
+            }
+
+            $resources_data = get_resource_data($subscription_resources_ids);
+        }
+
+        $response_data = array(
+            'plan_name' => $plan_name,
+            'subscription_start_date' => $subscription_start_date,
+            'plan_duration' => $plan_duration,
+            'plan_cron_interval' => $plan_cron_interval,
+            'plan_max_post_fetch' => $plan_max_post_fetch,
+            'resources_data' => $resources_data,
+
+        );
+        return new WP_REST_Response($response_data, 200);
     } else {
         return new WP_REST_Response('License is not valid', 403);
     }
 }
 
-function check_license($domain, $license_code)
-{
-    $licenses_tbl = array(
-        array(
-            'name' => 'co_pro',
-            'days' => 30,
-            'update_preiod' => 5,
-            'day_max_post_publish' => 100,
-        ),
-        array(
-            'name' => 'co_mid',
-            'days' => 30,
-            'update_preiod' => 10,
-            'day_max_post_publish' => 50,
-        )
-        ,
-        array(
-            'name' => 'co_base',
-            'days' => 30,
-            'update_preiod' => 5,
-            'day_max_post_publish' => 30,
-        )
-    );
-    $subscription = array(
-        array(
-            'user_id' => 1,
-            'site_domain' => 'http://localhost:8888/rasadi',
-            'secret_code' => 'lc_rasadi',
-            'license' => $licenses_tbl[0]
-        ),
-        array(
-            'user_id' => 2,
-            'site_domain' => 'http://localhost:8888/sarkhaat',
-            'secret_code' => 'lc_sarkhaat',
-            'license' => $licenses_tbl[1]
-        )
-    );
-
-
-    foreach ($subscription as $item):
-        if ($domain == $item['site_domain'] && $license_code == $item['secret_code']) {
-            return $item;
-        } else {
-            return false; // یا false بر اساس بررسی‌ها
-
-        }
-    endforeach;
-}
