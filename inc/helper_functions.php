@@ -160,7 +160,7 @@ function check_subscription_existence($subscription_site_url, $subscription_secr
         'post_type' => 'subscriptions',
         'post_status' => 'publish',
         'posts_per_page' => 1,
-        'meta_qurty' => array(
+        'meta_query' => array(
             'relation' => 'AND',
             array(
                 'key' => 'subscription_site_url',
@@ -175,11 +175,23 @@ function check_subscription_existence($subscription_site_url, $subscription_secr
         )
     );
     $subscription = new WP_Query($args);
+
     if ($subscription->have_posts()) {
+
         // error_log('i am server, subscription is valid');
-        return $subscription->post->ID;
+        $plan_data = get_plan_data($subscription->post->subscription_plan_id);
+        $subscription_extra_days = get_post_meta($subscription->post->ID, 'subscription_extra_days', true) ? get_post_meta($subscription->post->ID, 'subscription_extra_days', true) : 0;
+        $days_elapsed = date('Y-m-d H:i:s', strtotime($subscription->post->post_date . ' + ' . $plan_data['plan_duration'] . 'days' . ' + ' . $subscription_extra_days . 'days'));
+       
+        if (date('Y-m-d H:i:s') > $days_elapsed) {
+            // error_log(' Subscription is expired');
+            return false;
+        } else {
+            // error_log(' Subscription is exist and valid time! ');
+            return $subscription->post->ID;
+        }
     } else {
-        // error_log('i am server, subscription is Noooot valid');
+        // error_log(' Subscription is exist');
         return false;
     }
 
@@ -206,6 +218,7 @@ function get_subscription_data($subscription_id)
             'subscription_plan_id' => $subscription->post->subscription_plan_id,
             'subscription_resources_ids' => $subscription->post->subscription_resources_ids,
             'subscription_secret_code' => $subscription->post->subscription_secret_code,
+            'subscription_extra_days' => $subscription->post->subscription_extra_days,
         );
         return $subscription_data;
 

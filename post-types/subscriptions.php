@@ -81,7 +81,7 @@ function display_subscriptions_custom_meta_box($post)
     $subscription_plan_id = get_post_meta($post->ID, 'subscription_plan_id', true);
     $subscription_resources_ids = get_post_meta($post->ID, 'subscription_resources_ids', true);
     $subscription_secret_code = get_post_meta($post->ID, 'subscription_secret_code', true);
-    // $subscription_max_post_fetch = get_post_meta($post->ID, 'subscription_status', true);
+    $subscription_extra_days = get_post_meta( $post->ID, 'subscription_extra_days', true );
     ?>
     <style>
         .form-flex-container {
@@ -99,7 +99,7 @@ function display_subscriptions_custom_meta_box($post)
         }
 
         .third-width {
-            flex: 0 0 32.33%;
+            flex: 0 0 25%;
         }
     </style>
 
@@ -117,6 +117,11 @@ function display_subscriptions_custom_meta_box($post)
         <div class="third-width">
             <label for="subscription_plan_id" class="form-label">پلن : </label><br>
             <?php cop_plans_list_dropdown('subscription_plan_id', 'subscription_plan_id form-field form-input', 'subscription_plan_id', $subscription_plan_id); ?>
+        </div>
+        <div class="third-width">
+            <label for="subscription_plan_extra_day" class="form-label">روز تشویقی : </label><br>
+            <input type="number" name="subscription_extra_days" id="subscription_extra_days" class="form-field form-input"
+            value="<?php echo $subscription_extra_days; ?>" >
         </div>
         <div class="full-width">
             <label for="subscription_resources_ids" class="form-label">منابع : </label><br>
@@ -142,17 +147,21 @@ function save_subscriptions_custom_meta_box($post_id)
     if (isset($_POST['subscription_site_url'])) {
         update_post_meta($post_id, 'subscription_site_url', $_POST['subscription_site_url']);
     }
-    if (isset($_POST['subscription_plan_id'])) {
+    if (isset($_POST['subscription_plan_id'])) { 
         update_post_meta($post_id, 'subscription_plan_id', sanitize_text_field($_POST['subscription_plan_id']));
     }
     if (isset($_POST['subscription_resources_ids'])) {
         $resources_ids = array_map('intval', $_POST['subscription_resources_ids']);
         update_post_meta($post_id, 'subscription_resources_ids', $resources_ids);
     }
+    if (isset($_POST['subscription_extra_days'])) {
+        update_post_meta($post_id, 'subscription_extra_days', sanitize_text_field($_POST['subscription_extra_days']));
+    }
     if (!isset($_POST['subscription_secret_code']) && (get_post_meta($post_id, 'subscription_secret_code', true) == '')) {
         $seceret_code = generate_secret_code();
         update_post_meta($post_id, 'subscription_secret_code', sanitize_text_field($seceret_code));
     }
+    
 
 }
 add_action('save_post', 'save_subscriptions_custom_meta_box');
