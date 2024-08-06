@@ -14,9 +14,9 @@ add_action('rest_api_init', function () {
 function validate_license(WP_REST_Request $request)
 {
 
-    error_log(print_r($request,true));
+
     $subscription_secret_code = $request->get_param('subscription_secret_code');
-    $subscription_site_url = $request->get_header('Origin') ?: $request->get_header('Referer');
+    $subscription_site_url = $request->get_param('subscription_site_url');
 
     
 
@@ -28,7 +28,7 @@ function validate_license(WP_REST_Request $request)
     // بررسی اعتبار لایسنس
     if ($response_subscription_id = check_subscription_existence($subscription_site_url, $subscription_secret_code)) {
         $subscription_data = get_subscription_data($response_subscription_id);
-        error_log('im server' . $subscription_data);
+        // error_log('im server' . $subscription_data);
         if ($subscription_data) {
             $subscription_plan_id = $subscription_data['subscription_plan_id'];
             $subscription_start_date = $subscription_data['subscription_start_date'];
