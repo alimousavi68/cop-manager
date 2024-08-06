@@ -276,6 +276,7 @@ function get_resource_data($resource_ids)
         'post_type' => 'resource',
         'post_status' => 'publish',
         'post__in' => $resource_ids,
+        'posts_per_page' => -1
     );
 
     $resource = new WP_Query($args);
