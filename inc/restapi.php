@@ -16,7 +16,9 @@ function validate_license(WP_REST_Request $request)
 
     error_log(print_r($request,true));
     $subscription_secret_code = $request->get_param('subscription_secret_code');
-    $subscription_site_url = $_SERVER['HTTP_HOST'];
+    $subscription_site_url = $request->get_route();
+    // RETRIVE USER_AGENT FROM $request
+
 
     $response_subscription_id = check_subscription_existence($subscription_site_url, $subscription_secret_code);
 
