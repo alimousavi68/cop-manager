@@ -310,3 +310,99 @@ function get_resource_data($resource_ids)
 
 
 
+
+/**
+ * Convert CSS selector to XPath (handles combinators, class list, IDs, nth-of-type)
+ */
+function cop_css_to_xpath($selector) {
+    if (empty($selector)) {
+        return '';
+    }
+    if (strpos($selector, '//') === 0) {
+        return $selector; // Already XPath
+    }
+
+    $selector = trim($selector);
+    $selector = preg_replace('/\s*>\s*/', ' > ', $selector); // normalize > combinators
+    $selector = preg_replace('/\s+/', ' ', $selector); // normalize multiple spaces
+
+    $parts = explode(' ', $selector);
+    $xpath_parts = [];
+    $next_is_child = false;
+
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '>') {
+            $next_is_child = true;
+            continue;
+        }
+
+        $xpath_part = cop_parse_single_css_part($part);
+        
+        if (empty($xpath_parts)) {
+            $xpath_parts[] = '//' . $xpath_part;
+        } else {
+            if ($next_is_child) {
+                $xpath_parts[] = '/' . $xpath_part;
+                $next_is_child = false;
+            } else {
+                $xpath_parts[] = '//' . $xpath_part;
+            }
+        }
+    }
+
+    return implode('', $xpath_parts);
+}
+
+function cop_parse_single_css_part($part) {
+    $tag = '*';
+    if (preg_match('/^[a-zA-Z0-9\-]+/', $part, $matches)) {
+        $tag = $matches[0];
+        $part = substr($part, strlen($tag));
+    }
+
+    $conditions = [];
+
+    // Parse IDs
+    if (preg_match_all('/#([a-zA-Z0-9\-_]+)/', $part, $matches)) {
+        foreach ($matches[1] as $id) {
+            $conditions[] = "@id='$id'";
+        }
+    }
+
+    // Parse classes
+    if (preg_match_all('/\.([a-zA-Z0-9\-_]+)/', $part, $matches)) {
+        foreach ($matches[1] as $class) {
+            $conditions[] = "contains(concat(' ', normalize-space(@class), ' '), ' $class ')";
+        }
+    }
+
+    // Parse attributes like [itemprop="value"]
+    if (preg_match_all('/\[([a-zA-Z\-]+)=["\']?([^"\'\]]+)["\']?\]/', $part, $matches)) {
+        foreach ($matches[1] as $i => $attr) {
+            $val = $matches[2][$i];
+            $conditions[] = "@$attr='$val'";
+        }
+    }
+    
+    // Parse :nth-of-type(N)
+    $index = null;
+    if (preg_match('/:nth-of-type\((\d+)\)/', $part, $matches)) {
+        $index = $matches[1];
+    }
+
+    $result = $tag;
+    if (!empty($conditions)) {
+        $result .= '[' . implode(' and ', $conditions) . ']';
+    }
+    
+    if ($index !== null) {
+        $result .= '[' . $index . ']';
+    }
+
+    return $result;
+}
+
+
+
+

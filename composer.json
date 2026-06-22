@@ -1,0 +1,6 @@
+{
+    "name": "cop/manager",
+    "require": {
+        "woocommerce/action-scheduler": "^3.6"
+    }
+}
