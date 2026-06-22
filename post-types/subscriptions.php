@@ -140,12 +140,16 @@ function save_subscriptions_custom_meta_box($post_id)
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
         return;
 
+    // Fetch old values to clear cache
+    $old_url = get_post_meta($post_id, 'subscription_site_url', true);
+    $old_secret = get_post_meta($post_id, 'subscription_secret_code', true);
+
     // Save meta values
     if (isset($_POST['subscription_user_id'])) {
         update_post_meta($post_id, 'subscription_user_id', sanitize_text_field($_POST['subscription_user_id']));
     }
     if (isset($_POST['subscription_site_url'])) {
-        update_post_meta($post_id, 'subscription_site_url', $_POST['subscription_site_url']);
+        update_post_meta($post_id, 'subscription_site_url', esc_url_raw($_POST['subscription_site_url']));
     }
     if (isset($_POST['subscription_plan_id'])) { 
         update_post_meta($post_id, 'subscription_plan_id', sanitize_text_field($_POST['subscription_plan_id']));
@@ -162,6 +166,15 @@ function save_subscriptions_custom_meta_box($post_id)
         update_post_meta($post_id, 'subscription_secret_code', sanitize_text_field($seceret_code));
     }
     
-
+    // Clear transients
+    if ($old_url && $old_secret) {
+        delete_transient('cop_val_' . md5($old_url . '_' . $old_secret));
+    }
+    
+    $new_url = get_post_meta($post_id, 'subscription_site_url', true);
+    $new_secret = get_post_meta($post_id, 'subscription_secret_code', true);
+    if ($new_url && $new_secret && ($new_url !== $old_url || $new_secret !== $old_secret)) {
+        delete_transient('cop_val_' . md5($new_url . '_' . $new_secret));
+    }
 }
 add_action('save_post', 'save_subscriptions_custom_meta_box');
