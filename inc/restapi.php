@@ -20,6 +20,21 @@ function validate_license(WP_REST_Request $request)
         return new WP_REST_Response('Bad Request: Missing or invalid parameters', 400);
     }
 
+    // Rate Limiting by IP using Transients (Max 30 requests per minute)
+    $ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field($_SERVER['REMOTE_ADDR']) : 'unknown';
+    $rate_limit_key = 'cop_rate_limit_' . md5($ip);
+    $requests = get_transient($rate_limit_key);
+
+    if ($requests === false) {
+        set_transient($rate_limit_key, 1, 60);
+    } else {
+        $requests = intval($requests);
+        if ($requests >= 30) {
+            return new WP_REST_Response('Too Many Requests: Rate limit exceeded.', 429);
+        }
+        set_transient($rate_limit_key, $requests + 1, 60);
+    }
+
     $cache_key = 'cop_val_' . md5($subscription_site_url . '_' . $subscription_secret_code);
     $cached_response = get_transient($cache_key);
 
@@ -45,19 +60,15 @@ function validate_license(WP_REST_Request $request)
             $subscription_extra_days = ($subscription_data['subscription_extra_days']) ? intval($subscription_data['subscription_extra_days']) : 0;
 
             $plan_data = get_plan_data($subscription_plan_id);
-            $plan_name = '';
-            $plan_duration = 0;
-            $plan_cron_interval = 0;
-            $plan_max_post_fetch = 0;
-            $plan_grace_period = 0;
-
-            if ($plan_data) {
-                $plan_name = $plan_data['plan_name'];
-                $plan_duration = intval($plan_data['plan_duration']);
-                $plan_cron_interval = intval($plan_data['plan_cron_interval']);
-                $plan_max_post_fetch = intval($plan_data['plan_max_post_fetch']);
-                $plan_grace_period = isset($plan_data['plan_grace_period']) ? intval($plan_data['plan_grace_period']) : 0;
+            if (!$plan_data) {
+                return new WP_REST_Response('Plan data not found or inactive', 403);
             }
+
+            $plan_name = $plan_data['plan_name'];
+            $plan_duration = intval($plan_data['plan_duration']);
+            $plan_cron_interval = intval($plan_data['plan_cron_interval']);
+            $plan_max_post_fetch = intval($plan_data['plan_max_post_fetch']);
+            $plan_grace_period = isset($plan_data['plan_grace_period']) ? intval($plan_data['plan_grace_period']) : 0;
 
             $subscription_end_date = date('Y-m-d H:i:s', strtotime($subscription_start_date . ' + ' . $plan_duration . ' days + ' . $subscription_extra_days . ' days'));
             $resources_data = get_resource_data($subscription_resources_ids);

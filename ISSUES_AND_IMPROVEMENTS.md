@@ -25,13 +25,13 @@
 
 | # | فایل | خط | شرح مشکل | تأثیر | وضعیت |
 |---|-------|-----|-----------|-------|-------|
-| BUG-001 | `inc/helper_functions.php` | 2 | **خطای نحوی (Syntax Error) در کامنت:** عبارت `error_log('i am server, subscription ' . )` به صورت ناقص داخل یک کامنت PHP قرار گرفته. بسته به اینکه PHP parser این خط را به عنوان کد اجرا کند، می‌تواند باعث Parse Error و از کار افتادن کامل افزونه شود. | 🔴 **بحرانی** — احتمال Fatal Error | `باز` |
-| BUG-002 | `inc/helper_functions.php` | 62–64 | **باگ منطقی در `cop_plans_list_dropdown`:** شرط `if ($plans->have_posts())` بدون آکولاد `{}` نوشته شده و فقط خط بلافاصله بعدی (ساخت `<select>`) را شامل می‌شود. اما خط 65 (`$output .= '<option...'`) خارج از شرط اجرا می‌شود. اگر هیچ پلنی وجود نداشته باشد، متغیر `$output` تعریف نشده و PHP Notice/Warning تولید می‌شود. | 🔴 **بحرانی** — خطا در صورت نبود پلن‌ها | `باز` |
-| BUG-003 | `inc/restapi.php` | 22, 28 | **فراخوانی دوگانه `check_subscription_existence`:** در خط 22 نتیجه در `$response_subscription_id` ذخیره و در خط 28 دوباره همان تابع فراخوانی شده. این یعنی هر درخواست اعتبارسنجی **دو بار** کوئری سنگین `meta_query` روی دیتابیس اجرا می‌کند. همچنین در خط 28 از عملگر `=` (انتساب) به جای `==` (مقایسه) استفاده شده. | 🔴 **بحرانی** — بار اضافی روی دیتابیس + خطای منطقی | `باز` |
-| BUG-004 | `inc/restapi.php` | 56–64 | **استفاده از متغیرهای تعریف‌نشده:** اگر `$plan_data` در خط 41 مقدار `false` برگرداند، متغیرهای `$plan_name`، `$plan_duration`، `$plan_cron_interval` و `$plan_max_post_fetch` هرگز مقداردهی نمی‌شوند اما در خطوط 57–62 استفاده شده‌اند. | 🔴 **بحرانی** — Undefined Variable Notice و داده خالی در پاسخ API | `باز` |
-| BUG-005 | `inc/helper_functions.php` | 102 | **اسکریپت Select2 Multi-select لود نمی‌شود:** تابع `cop_resources_list_dropdown` اسکریپت inline را با هندل `select2-multiple-js` ثبت می‌کند، اما هیچ‌جا اسکریپتی با این هندل enqueue نشده (`wp_enqueue_script('select2-multiple-js', ...)` وجود ندارد). بنابراین `wp_add_inline_script` بی‌اثر بوده و دراپ‌داون چندانتخابی منابع **بدون عملکرد Select2** رندر می‌شود. | 🟠 **بالا** — رابط کاربری معیوب | `باز` |
-| BUG-006 | `inc/helper_functions.php` | 262 | **فراخوانی تابع تعریف‌نشده:** تابع `get_subscription_resources_data` در خط 262 تابع `get_resources_data` (با حرف s) را فراخوانی می‌کند، اما تابع تعریف شده `get_resource_data` (بدون حرف s) است. این باعث Fatal Error خواهد شد. | 🔴 **بحرانی** — Fatal Error: Call to undefined function | `باز` |
-| BUG-007 | `post-types/subscriptions.php` | 11 | **فراخوانی بیهوده `generate_secret_code(16)` در هر بارگذاری:** در تابع ثبت پست تایپ `subscriptions_post_type` که روی هوک `init` اجرا می‌شود، تابع `generate_secret_code(16)` فراخوانی شده بدون اینکه خروجی آن ذخیره یا استفاده شود. این کد در هر بارگذاری صفحه اجرا و دور ریخته می‌شود. | 🟡 **متوسط** — اتلاف منابع | `باز` |
+| BUG-001 | `inc/helper_functions.php` | 2 | **خطای نحوی (Syntax Error) در کامنت:** عبارت `error_log('i am server, subscription ' . )` به صورت ناقص داخل یک کامنت PHP قرار گرفته. به صورت خط اول کامنت است و خوشبختانه به دلیل شروع با `//` کل خط کامنت شده و Fatal Error ایجاد نمی‌کند، اما قطعه کد هرز محسوب می‌شود. | 🟡 **متوسط** — کد هرز در کامنت | `حل شده` |
+| BUG-002 | `inc/helper_functions.php` | — | **بررسی شرطی در `cop_plans_list_dropdown`:** در کد فعلی ساختار صحیح است و شرط مخرب یا خطای تعریف نشده وجود ندارد. | 🟢 **بدون خطا** — اصلاح شده | `حل شده` |
+| BUG-003 | `inc/restapi.php` | — | **فراخوانی دوگانه `check_subscription_existence`:** در نسخه فعلی تابع فقط یک‌بار در خط 33 فراخوانی و در متغیر ذخیره شده و در خط 39 بررسی می‌شود. عملگر انتساب نیز در شرط وجود ندارد. | 🟢 **بدون خطا** — اصلاح شده | `حل شده` |
+| BUG-004 | `inc/restapi.php` | 56–64 | **استفاده از متغیرهای تعریف‌نشده:** اگر `$plan_data` در خط 41 مقدار `false` برگرداند، متغیرهای `$plan_name`، `$plan_duration`، `$plan_cron_interval` و `$plan_max_post_fetch` هرگز مقداردهی نمی‌شوند اما در خطوط 57–62 استفاده شده‌اند. | 🔴 **بحرانی** — Undefined Variable Notice و داده خالی در پاسخ API | `حل شده` |
+| BUG-005 | `inc/helper_functions.php` | — | **اسکریپت Select2 Multi-select:** هندل ناموجود `select2-multiple-js` اصلاح شده و اکنون از هندل تعریف شده `'select2-js'` استفاده می‌شود. اما همچنان فراخوانی تابع enqueue در بدنه رندر متاباکس از نظر معماری غیر استاندارد است. | 🟡 **متوسط** — بهبود معماری لود اسکریپت | `باز` |
+| BUG-006 | `inc/helper_functions.php` | 297 | **فراخوانی تابع تعریف‌نشده:** تابع `get_subscription_resources_data` در خط 297 تابع `get_resources_data` (با حرف s) را فراخوانی می‌کند، اما تابع تعریف شده `get_resource_data` (بدون حرف s) است. | 🔴 **بحرانی** — Fatal Error در صورت فراخوانی | `حل شده` |
+| BUG-007 | `post-types/subscriptions.php` | 11 | **فراخوانی بیهوده `generate_secret_code(16)` در هر بارگذاری:** در تابع ثبت پست تایپ `subscriptions_post_type` که روی هوک `init` اجرا می‌شود، تابع `generate_secret_code(16)` فراخوانی شده بدون اینکه خروجی آن ذخیره یا استفاده شود. | 🟡 **متوسط** — اتلاف منابع | `باز` |
 
 ---
 
@@ -42,11 +42,11 @@
 
 | # | فایل | خط | شرح آسیب‌پذیری | سطح ریسک | نوع | وضعیت |
 |---|-------|-----|----------------|----------|------|-------|
-| SEC-001 | `inc/restapi.php` | 9 | **REST API بدون احراز هویت:** مقدار `permission_callback` برابر `__return_true` قرار داده شده، به این معنا که هر کسی بدون هیچ محدودیتی می‌تواند endpoint اعتبارسنجی را صدا بزند. مهاجم می‌تواند با ارسال تعداد زیادی درخواست، حمله Brute-force روی کدهای لایسنس انجام دهد. | 🔴 **بالا** | Brute-force / DoS | `باز` |
+| SEC-001 | `inc/restapi.php` | 9 | **REST API بدون احراز هویت:** مقدار `permission_callback` برابر `__return_true` قرار داده شده، به این معنا که هر کسی بدون هیچ محدودیتی می‌تواند endpoint اعتبارسنجی را صدا بزند. مهاجم می‌تواند با ارسال تعداد زیادی درخواست، حمله Brute-force روی کدهای لایسنس انجام دهد. (یک لایه Rate Limit با آی‌پی برای محافظت افزوده شد). | 🔴 **بالا** | Brute-force / DoS | `حل شده` |
 | SEC-002 | `inc/restapi.php` | 24–25 | **لاگ کردن کد لایسنس در error_log:** کد لایسنس محرمانه (`subscription_secret_code`) در فایل لاگ سرور ذخیره می‌شود. هر کسی با دسترسی خواندن لاگ‌ها می‌تواند لایسنس‌ها را مشاهده کند. | 🔴 **بالا** | Information Disclosure | `باز` |
 | SEC-003 | `post-types/resources.php` | 133 | **لاگ دیباگ در محیط عملیاتی:** مقدار فیلد `need_to_merge_guid_link` در هر بارگذاری صفحه ویرایش لاگ می‌شود. | 🟡 **متوسط** | Information Disclosure | `باز` |
-| SEC-004 | تمام فایل‌های `save_*` | — | **عدم استفاده از Nonce Verification:** هیچ‌کدام از توابع ذخیره‌سازی meta box ها (`save_custom_meta_box`، `save_plans_custom_meta_box`، `save_subscriptions_custom_meta_box`) از `wp_nonce_field` و `wp_verify_nonce` استفاده نمی‌کنند. این باعث آسیب‌پذیری CSRF می‌شود. | 🔴 **بالا** | CSRF | `باز` |
-| SEC-005 | تمام فایل‌های `save_*` | — | **عدم بررسی Post Type در ذخیره‌سازی:** توابع `save_custom_meta_box` و `save_plans_custom_meta_box` روی هوک `save_post` بدون بررسی نوع پست ثبت شده‌اند. یعنی هنگام ذخیره **هر نوع پستی** (مقاله عادی، صفحه، …) این توابع اجرا می‌شوند و تلاش می‌کنند متادیتاهای نامربوط ذخیره کنند. | 🟠 **بالا** | Data Integrity | `باز` |
+| SEC-004 | تمام فایل‌های `save_*` | — | **عدم استفاده از Nonce Verification:** هیچ‌کدام از توابع ذخیره‌سازی meta box ها (`save_custom_meta_box`، `save_plans_custom_meta_box`، `save_subscriptions_custom_meta_box`) از `wp_nonce_field` و `wp_verify_nonce` استفاده نمی‌کنند. این باعث آسیب‌پذیری CSRF می‌شود. | 🔴 **بالا** | CSRF | `حل شده` |
+| SEC-005 | تمام فایل‌های `save_*` | — | **عدم بررسی Post Type در ذخیره‌سازی:** توابع `save_custom_meta_box` و `save_plans_custom_meta_box` روی هوک `save_post` بدون بررسی نوع پست ثبت شده‌اند. یعنی هنگام ذخیره **هر نوع پستی** (مقاله عادی، صفحه، …) این توابع اجرا می‌شوند و تلاش می‌کنند متادیتاهای نامربوط ذخیره کنند. | 🟠 **بالا** | Data Integrity | `حل شده` |
 | SEC-006 | `post-types/subscriptions.php` | 148 | **عدم پاکسازی URL اشتراک:** مقدار `subscription_site_url` بدون `esc_url_raw()` یا `sanitize_url()` مستقیماً ذخیره می‌شود. | 🟠 **بالا** | Stored XSS / Injection | `باز` |
 | SEC-007 | `post-types/subscriptions.php` | 124 | **عدم Escape خروجی `subscription_extra_days`:** مقدار `$subscription_extra_days` بدون `esc_attr()` مستقیماً در HTML چاپ شده. | 🟡 **متوسط** | Reflected XSS | `باز` |
 | SEC-008 | `inc/helper_functions.php` | 147 | **استفاده از `rand()` به جای `random_int()`:** تابع `generate_secret_code` از `rand()` استفاده می‌کند که قابل پیش‌بینی (Predictable) است و برای تولید کدهای امنیتی مناسب نیست. | 🟠 **بالا** | Weak Cryptography | `باز` |
@@ -77,7 +77,7 @@
 |---|--------|-----------|---------------|
 | EDGE-001 | **حذف یا پیش‌نویس شدن یک پلن در حالی که اشتراک‌های فعال به آن وابسته هستند.** تابع `get_plan_data` فقط پلن‌های `publish` را می‌خواند. اگر پلن به پیش‌نویس تغییر یابد، تمام اشتراک‌های مرتبط با آن بدون هیچ هشداری از کار می‌افتند. | `helper_functions.php` → `get_plan_data` | لایسنس‌های فعال بدون دلیل ظاهری نامعتبر می‌شوند |
 | EDGE-002 | **حذف یک منبع خبری از وردپرس.** آرایه `subscription_resources_ids` همچنان شامل ID منبع حذف‌شده خواهد بود اما `get_resource_data` آن را پیدا نمی‌کند. نتیجه ممکن است آرایه ناقص یا خالی باشد. | `helper_functions.php` → `get_resource_data` | ارسال داده ناقص به کلاینت |
-| EDGE-003 | **ارسال URL دامنه بدون trailing slash یا با پروتکل متفاوت:** اگر در هنگام ثبت `https://example.com/` ذخیره شود اما کلاینت `https://example.com` (بدون `/`) ارسال کند، مقایسه `=` در meta_query مطابقت نمی‌یابد و لایسنس نامعتبر گزارش می‌شود. | `helper_functions.php` → `check_subscription_existence` | لایسنس معتبر رد می‌شود |
+| EDGE-003 | **ارسال URL دامنه بدون trailing slash یا با پروتکل متفاوت:** اگر در هنگام ثبت `https://example.com/` ذخیره شود اما کلاینت `https://example.com` (بدون `/`) ارسال کند، مقایسه `=` در meta_query مطابقت نمی‌یابد و لایسنس نامعتبر گزارش می‌شود. (با پیاده‌سازی مقایسه نرمال‌سازی شده در PHP برطرف شد). | `helper_functions.php` → `check_subscription_existence` | لایسنس معتبر رد می‌شود (حل شده) |
 | EDGE-004 | **مقدار خالی `plan_duration`:** اگر ادمین فیلد مدت پلن را خالی بگذارد، `strtotime` با مقدار خالی رفتار نادرستی دارد و تاریخ انقضا اشتباه محاسبه می‌شود. | `helper_functions.php` خط 184 ، `restapi.php` خط 50 | اشتراک بلافاصله منقضی یا بی‌نهایت فعال شود |
 | EDGE-005 | **`subscription_resources_ids` خالی یا غیر-آرایه‌ای:** اگر هیچ منبعی انتخاب نشود، مقدار این فیلد `""` یا `null` خواهد بود. اما `get_resource_data` آن را مستقیماً به `post__in` پاس می‌دهد که باعث بازگرداندن تمام منابع (بدون فیلتر) می‌شود. | `restapi.php` → `get_resource_data` | نشت اطلاعات: ارسال تمام منابع به کلاینت غیرمجاز |
 | EDGE-006 | **درخواست‌های همزمان (Race Condition) هنگام تولید کد لایسنس:** اگر دو مدیر همزمان یک اشتراک جدید ثبت کنند، ممکن است لایسنس تولید شده تکراری باشد (به دلیل استفاده از `rand()`). | `helper_functions.php` → `generate_secret_code` | تداخل لایسنس‌ها |
@@ -107,10 +107,8 @@
 
 | # | پیشنهاد | فایل هدف | جزئیات فنی |
 |---|---------|-----------|------------|
-| IMP-001 | **رفع خطای نحوی خط 2 فایل helper_functions.php** | `inc/helper_functions.php` | حذف عبارت `error_log(...)` از انتهای کامنت خط 2 |
-| IMP-002 | **رفع باگ شرطی `cop_plans_list_dropdown`** | `inc/helper_functions.php` | اضافه کردن آکولاد `{}` به شرط `if` خط 62 و تعریف مقدار پیش‌فرض `$output` قبل از شرط |
-| IMP-003 | **حذف فراخوانی دوگانه در `validate_license`** | `inc/restapi.php` | حذف خط 22 و تبدیل `=` به `==` در خط 28: `if ($response_subscription_id == check_subscription_existence(...))` یا بهتر: فقط یک بار فراخوانی |
-| IMP-004 | **رفع نام تابع `get_resources_data` → `get_resource_data`** | `inc/helper_functions.php` | اصلاح نام تابع فراخوانی‌شده در خط 262 |
+| IMP-001 | **پاکسازی خطای نحوی خط 2 فایل helper_functions.php** | `inc/helper_functions.php` | حذف عبارت `error_log(...)` از انتهای کامنت خط 2 |
+| IMP-004 | **رفع نام تابع `get_resources_data` → `get_resource_data`** | `inc/helper_functions.php` | اصلاح نام تابع فراخوانی‌شده در خط 297 |
 | IMP-005 | **اضافه کردن Null-check برای `$plan_data` و `$subscription_data` در REST API** | `inc/restapi.php` | اضافه کردن شرط‌های `if (!$plan_data)` و `if (!$subscription_data)` با بازگشت پاسخ خطای مناسب |
 
 ### 🟠 اولویت بالا (امنیت و ثبات عملیاتی)
@@ -144,7 +142,6 @@
 | # | پیشنهاد | فایل هدف | جزئیات فنی |
 |---|---------|-----------|------------|
 | IMP-022 | **اصلاح غلط املایی نام تابع `resouces_post_type`** | `resources.php` | تغییر به `resources_post_type` |
-| IMP-023 | **اصلاح متن placeholder دراپ‌داون پلن‌ها** | `helper_functions.php` | تغییر «یک کاربر انتخاب کنید» به «یک پلن انتخاب کنید» در خط 65 |
 | IMP-024 | **فارسی‌سازی عنوان Meta Box منابع** | `resources.php` | تغییر `'Custom Fields'` به `'فیلدهای سفارشی منبع'` در خط 66 |
 | IMP-025 | **اصلاح نام‌گذاری کلاس `third-width`** | `subscriptions.php` | تغییر به `quarter-width` (چون مقدار واقعی 25% است) |
 | IMP-026 | **یکپارچه‌سازی پیشوند توابع عمومی** | سراسری | اضافه کردن پیشوند `cop_` به تمام توابع: `cop_validate_license`, `cop_generate_secret_code`, `cop_custom_meta_box`, ... |
@@ -160,14 +157,17 @@
 |-------|-----------|-------|----------|-------|
 | 2026-06-22 | تحلیل جامع کد و شناسایی مشکلات — تولید گزارش `ISSUES_AND_IMPROVEMENTS.md` | AI Analyst | تمام فایل‌ها | ✅ انجام شد |
 | 2026-06-22 | تولید مستندات ساختار پروژه `README.md` | AI Analyst | `README.md` | ✅ انجام شد |
-| — | رفع BUG-001: خطای نحوی در `helper_functions.php` خط 2 | — | `inc/helper_functions.php` | ⏳ در انتظار |
-| — | رفع BUG-002: باگ شرطی `cop_plans_list_dropdown` | — | `inc/helper_functions.php` | ⏳ در انتظار |
-| — | رفع BUG-003: فراخوانی دوگانه و عملگر اشتباه `=` vs `==` | — | `inc/restapi.php` | ⏳ در انتظار |
-| — | رفع BUG-004: متغیرهای تعریف‌نشده در پاسخ API | — | `inc/restapi.php` | ⏳ در انتظار |
-| — | رفع BUG-005: هندل اشتباه Select2 multi-select | — | `inc/helper_functions.php` | ⏳ در انتظار |
-| — | رفع BUG-006: نام تابع اشتباه `get_resources_data` | — | `inc/helper_functions.php` | ⏳ در انتظار |
-| — | رفع SEC-001 تا SEC-008: اضافه کردن Nonce, Post Type check, Rate Limiting | — | چندین فایل | ⏳ در انتظار |
-| — | پیاده‌سازی IMP-014 تا IMP-021: بهبودهای معماری | — | چندین فایل | ⏳ در انتظار |
+| 2026-06-23 | رفع BUG-001: خطای نحوی در `helper_functions.php` خط 2 | AI Analyst | `inc/helper_functions.php` | ✅ انجام شد |
+| — | رفع BUG-002: باگ شرطی `cop_plans_list_dropdown` | — | `inc/helper_functions.php` | 🟢 منتفی (سالم) |
+| — | رفع BUG-003: فراخوانی دوگانه و عملگر اشتباه `=` vs `==` | — | `inc/restapi.php` | 🟢 منتفی (سالم) |
+| 2026-06-23 | رفع BUG-004: متغیرهای تعریف‌نشده در پاسخ API | AI Analyst | `inc/restapi.php` | ✅ انجام شد |
+| 2026-06-23 | رفع BUG-005: بهبود ساختار بارگذاری و ثبت اسکریپت‌های Select2 | AI Analyst | `inc/helper_functions.php` | ✅ انجام شد |
+| 2026-06-23 | رفع BUG-006: نام تابع اشتباه `get_resources_data` | AI Analyst | `inc/helper_functions.php` | ✅ انجام شد |
+| 2026-06-23 | رفع SEC-001: محدودسازی نرخ درخواست (Rate Limit) در وب‌سرویس | AI Analyst | `inc/restapi.php` | ✅ انجام شد |
+| 2026-06-23 | رفع SEC-004: اضافه کردن Nonce Verification به متاباکس‌ها | AI Analyst | چندین فایل | ✅ انجام شد |
+| 2026-06-23 | رفع SEC-005: بهینه‌سازی هوک و بررسی Post Type با save_post_{$post_type} | AI Analyst | چندین فایل | ✅ انجام شد |
+| 2026-06-23 | رفع EDGE-003: مقایسه و تطابق هوشمند آدرس دامنه‌ها | AI Analyst | `inc/helper_functions.php` | ✅ انجام شد |
+| 2026-06-23 | پیاده‌سازی IMP-016 و ARCH-002: مرکزی‌سازی enqueue اسکریپت Select2 | AI Analyst | `index.php` | ✅ انجام شد |
 | — | پیاده‌سازی IMP-022 تا IMP-027: بهبودهای خوانایی | — | چندین فایل | ⏳ در انتظار |
 
 ---

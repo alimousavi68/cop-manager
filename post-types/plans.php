@@ -203,6 +203,7 @@ function display_plans_custom_meta_box($post)
     </style>
 
     <div class="cop-premium-metabox">
+        <?php wp_nonce_field('cop_save_plans_meta', 'cop_plans_nonce'); ?>
         <div class="cop-grid-container">
             
             <!-- Card 1: Time & Validity Settings -->
@@ -300,6 +301,16 @@ function save_plans_custom_meta_box($post_id)
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
         return;
 
+    // Verify nonce
+    if (!isset($_POST['cop_plans_nonce']) || !wp_verify_nonce($_POST['cop_plans_nonce'], 'cop_save_plans_meta')) {
+        return;
+    }
+
+    // Check post type
+    if (get_post_type($post_id) !== 'plans') {
+        return;
+    }
+
     // Save meta values with validation
     if (isset($_POST['plan_duration'])) {
         update_post_meta($post_id, 'plan_duration', absint($_POST['plan_duration']));
@@ -343,4 +354,4 @@ function save_plans_custom_meta_box($post_id)
         wp_reset_postdata();
     }
 }
-add_action('save_post', 'save_plans_custom_meta_box');
+add_action('save_post_plans', 'save_plans_custom_meta_box');

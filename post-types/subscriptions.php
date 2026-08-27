@@ -82,6 +82,35 @@ function display_subscriptions_custom_meta_box($post)
     $subscription_resources_ids = get_post_meta($post->ID, 'subscription_resources_ids', true);
     $subscription_secret_code = get_post_meta($post->ID, 'subscription_secret_code', true);
     $subscription_extra_days = get_post_meta( $post->ID, 'subscription_extra_days', true );
+
+    // Calculate subscription status dynamically
+    $subscription_start_date = $post->post_date;
+    $plan_data = $subscription_plan_id ? get_plan_data($subscription_plan_id) : false;
+    $plan_duration = isset($plan_data['plan_duration']) ? intval($plan_data['plan_duration']) : 0;
+    $plan_grace_period = isset($plan_data['plan_grace_period']) ? intval($plan_data['plan_grace_period']) : 0;
+    $extra_days = $subscription_extra_days ? intval($subscription_extra_days) : 0;
+    
+    $end_date_ts = strtotime($subscription_start_date . ' + ' . $plan_duration . ' days + ' . $extra_days . ' days');
+    $end_date = date('Y-m-d H:i:s', $end_date_ts);
+    $grace_end_date_ts = strtotime(date('Y-m-d H:i:s', $end_date_ts) . ' + ' . $plan_grace_period . ' days');
+    
+    $current_time = current_time('timestamp');
+    
+    $status_label = 'تنظیم نشده';
+    $status_color = '#64748b';
+    
+    if ($subscription_plan_id && $plan_data) {
+        if ($current_time <= $end_date_ts) {
+            $status_label = 'فعال (Active)';
+            $status_color = '#10b981'; // Green
+        } elseif ($current_time <= $grace_end_date_ts) {
+            $status_label = 'دوره ارفاق (Grace Period)';
+            $status_color = '#f59e0b'; // Amber
+        } else {
+            $status_label = 'منقضی شده (Expired)';
+            $status_color = '#ef4444'; // Red
+        }
+    }
     ?>
     <style>
         .form-flex-container {
@@ -104,7 +133,7 @@ function display_subscriptions_custom_meta_box($post)
     </style>
 
     <div class="form-container form-flex-container" style="display: flex;flex-wrap: wrap;gap:1%;row-gap:20px;padding: 20px 0px;">
-
+        <?php wp_nonce_field('cop_save_subscriptions_meta', 'cop_subscriptions_nonce'); ?>
         <div class="third-width">
             <label for="subscription_user_id" class="form-label">کاربر : </label><br>
             <?php cop_list_users_dropdown('subscription_user_id', 'subscription_user_id form-field form-input', 'subscription_user_id', $subscription_user_id); ?>
@@ -127,11 +156,47 @@ function display_subscriptions_custom_meta_box($post)
             <label for="subscription_resources_ids" class="form-label">منابع : </label><br>
             <?php cop_resources_list_dropdown('subscription_resources_ids', 'subscription_resources_ids form-field form-input', 'subscription_resources_ids', (array) $subscription_resources_ids); ?>
         </div>
-        <div class="full-width">
-            <label for="subscription_secret_code" class="form-label">لایسنس کد اختصاصی : </label><br>
-            <input type="text" id="subscription_secret_code" name="subscription_secret_code"
-                class="form-field form-input widefat " readonly value="<?php echo esc_attr($subscription_secret_code); ?>" style="direction:ltr;text-align:left;font-size:18px; height:20px;">
+        <div class="full-width" style="margin-top: 15px;">
+            <label for="subscription_secret_code" class="form-label" style="font-weight: 700; color: #1e293b;">لایسنس کد اختصاصی : </label><br>
+            <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                <input type="text" id="subscription_secret_code" name="subscription_secret_code"
+                    class="form-field form-input widefat " readonly value="<?php echo esc_attr($subscription_secret_code); ?>" style="direction:ltr;text-align:left;font-size:16px; height:40px; border-radius: 8px; border: 1.5px solid #cbd5e1; flex: 1; padding: 10px;">
+                <button type="button" id="cop_copy_license_btn" class="button button-secondary" style="height: 40px; border-radius: 8px; font-weight: 600;">📋 کپی لایسنس</button>
+            </div>
+            <script>
+                document.getElementById('cop_copy_license_btn').addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var copyText = document.getElementById('subscription_secret_code');
+                    copyText.select();
+                    copyText.setSelectionRange(0, 99999);
+                    navigator.clipboard.writeText(copyText.value);
+                    
+                    var btn = this;
+                    btn.innerText = '✅ کپی شد!';
+                    setTimeout(function() {
+                        btn.innerText = '📋 کپی لایسنس';
+                    }, 2000);
+                });
+            </script>
         </div>
+
+        <?php if ($subscription_plan_id && $plan_data): ?>
+        <div class="full-width" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+            <div>
+                <span style="font-size: 13px; color: #64748b; font-weight: 600;">وضعیت اشتراک: </span>
+                <span style="background: <?php echo $status_color; ?>; color: #fff; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 12px; margin-right: 5px;"><?php echo $status_label; ?></span>
+            </div>
+            <div style="font-size: 13px; color: #475569;">
+                <span>📅 تاریخ شروع: <b><?php echo date('Y-m-d', strtotime($subscription_start_date)); ?></b></span>
+                <span style="margin: 0 10px; color:#cbd5e1;">|</span>
+                <span>⌛ تاریخ انقضا: <b><?php echo date('Y-m-d', $end_date_ts); ?></b></span>
+                <?php if ($plan_grace_period > 0): ?>
+                <span style="margin: 0 10px; color:#cbd5e1;">|</span>
+                <span style="color: #b45309;">🛡️ پایان دوره ارفاق: <b><?php echo date('Y-m-d', $grace_end_date_ts); ?></b></span>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
     <?php
 }
@@ -139,6 +204,16 @@ function save_subscriptions_custom_meta_box($post_id)
 {
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
         return;
+
+    // Verify nonce
+    if (!isset($_POST['cop_subscriptions_nonce']) || !wp_verify_nonce($_POST['cop_subscriptions_nonce'], 'cop_save_subscriptions_meta')) {
+        return;
+    }
+
+    // Check post type
+    if (get_post_type($post_id) !== 'subscriptions') {
+        return;
+    }
 
     // Fetch old values to clear cache
     $old_url = get_post_meta($post_id, 'subscription_site_url', true);
@@ -177,4 +252,4 @@ function save_subscriptions_custom_meta_box($post_id)
         delete_transient('cop_val_' . md5($new_url . '_' . $new_secret));
     }
 }
-add_action('save_post', 'save_subscriptions_custom_meta_box');
+add_action('save_post_subscriptions', 'save_subscriptions_custom_meta_box');

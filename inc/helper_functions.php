@@ -1,16 +1,11 @@
 <?php
-//اضافه کردن اسکریپت های select2 برای یک دراپ داون حرفه ایerror_log('i am server, subscription ' . )
+//اضافه کردن اسکریپت های select2 برای یک دراپ داون حرفه ای
 
 
 
 //بازیابی لیست همه کاربران در قالب دارپ داون
 function cop_list_users_dropdown($name, $class, $id, $selected_item)
 {
-    wp_enqueue_style('select2-css', plugins_url('assets/css/select2.min.css', dirname(__FILE__)));
-    wp_enqueue_script('select2-js', plugins_url('assets/js/select2.min.js', dirname(__FILE__)), array('jquery'), '4.0.13', true);
-    wp_add_inline_script('select2-js', 'jQuery(document).ready(function($) { $(".select2").select2(); });');
-
-
     // دریافت تمام کاربران وب‌سایت
     $users = get_users();
 
@@ -41,11 +36,6 @@ function cop_list_users_dropdown($name, $class, $id, $selected_item)
 //بازیابی لیست همه پلن ها در قالب دارپ داون
 function cop_plans_list_dropdown($name, $class, $id, $selected_item)
 {
-
-    wp_enqueue_style('select2-css', plugins_url('assets/css/select2.min.css', dirname(__FILE__)));
-    wp_enqueue_script('select2-js', plugins_url('assets/js/select2.min.js', dirname(__FILE__)), array('jquery'), '4.0.13', true);
-    wp_add_inline_script('select2-js', 'jQuery(document).ready(function($) { $(".select2:not(.resource_multiple)").select2(); });');
-
     $args = array(
         'post_type' => 'plans',
         'post_status' => 'publish',
@@ -89,9 +79,6 @@ function cop_plans_list_dropdown($name, $class, $id, $selected_item)
 //بازیابی لیست همه منابع در قالب دارپ داون
 function cop_resources_list_dropdown($name, $class, $id, $selected_items)
 {
-    wp_enqueue_style('select2-css', plugins_url('assets/css/select2.min.css', dirname(__FILE__)));
-    wp_enqueue_script('select2-js', plugins_url('assets/js/select2.min.js', dirname(__FILE__)), array('jquery'), '4.0.13', true);
-    
     $multiple_js_query =
         "jQuery(document).ready(function($) {
             function initResourcesSelect2() {
@@ -184,18 +171,11 @@ function generate_secret_code($length = 16)
 // Check license is valid or not
 function check_subscription_existence($subscription_site_url, $subscription_secret_code)
 {
-
     $args = array(
         'post_type' => 'subscriptions',
         'post_status' => 'publish',
         'posts_per_page' => 1,
         'meta_query' => array(
-            'relation' => 'AND',
-            array(
-                'key' => 'subscription_site_url',
-                'value' => $subscription_site_url,
-                'compare' => '='
-            ),
             array(
                 'key' => 'subscription_secret_code',
                 'value' => $subscription_secret_code,
@@ -208,18 +188,23 @@ function check_subscription_existence($subscription_site_url, $subscription_secr
 
     if ($subscription->have_posts()) {
         $subscription_post = $subscription->post;
-        $plan_data = get_plan_data($subscription_post->subscription_plan_id);
-        $subscription_extra_days = get_post_meta($subscription_post->ID, 'subscription_extra_days', true) ? get_post_meta($subscription_post->ID, 'subscription_extra_days', true) : 0;
+        $db_site_url = get_post_meta($subscription_post->ID, 'subscription_site_url', true);
         
-        $plan_duration = isset($plan_data['plan_duration']) ? intval($plan_data['plan_duration']) : 0;
-        $plan_grace_period = isset($plan_data['plan_grace_period']) ? intval($plan_data['plan_grace_period']) : 0;
-        $days_elapsed = date('Y-m-d H:i:s', strtotime($subscription_post->post_date . ' + ' . $plan_duration . ' days + ' . intval($subscription_extra_days) . ' days'));
-        $grace_elapsed = date('Y-m-d H:i:s', strtotime($days_elapsed . ' + ' . $plan_grace_period . ' days'));
-       
-        if (current_time('mysql') > $grace_elapsed) {
-            $result = false;
-        } else {
-            $result = $subscription_post->ID;
+        if (cop_normalize_url($db_site_url) === cop_normalize_url($subscription_site_url)) {
+            $plan_id = get_post_meta($subscription_post->ID, 'subscription_plan_id', true);
+            $plan_data = get_plan_data($plan_id);
+            $subscription_extra_days = get_post_meta($subscription_post->ID, 'subscription_extra_days', true) ? get_post_meta($subscription_post->ID, 'subscription_extra_days', true) : 0;
+            
+            $plan_duration = isset($plan_data['plan_duration']) ? intval($plan_data['plan_duration']) : 0;
+            $plan_grace_period = isset($plan_data['plan_grace_period']) ? intval($plan_data['plan_grace_period']) : 0;
+            $days_elapsed = date('Y-m-d H:i:s', strtotime($subscription_post->post_date . ' + ' . $plan_duration . ' days + ' . intval($subscription_extra_days) . ' days'));
+            $grace_elapsed = date('Y-m-d H:i:s', strtotime($days_elapsed . ' + ' . $plan_grace_period . ' days'));
+           
+            if (current_time('mysql') > $grace_elapsed) {
+                $result = false;
+            } else {
+                $result = $subscription_post->ID;
+            }
         }
         wp_reset_postdata();
     }
@@ -294,7 +279,7 @@ function get_subscription_resources_data($subscription_id)
         $subscription_resources_ids = get_post_meta($subscription_id, 'subscription_resources_ids', true);
 
         if ($subscription_resources_ids) {
-            $resources_data = get_resources_data($subscription_resources_ids);
+            $resources_data = get_resource_data($subscription_resources_ids);
             return $resources_data;
         } else {
             return false;
@@ -307,8 +292,8 @@ function get_subscription_resources_data($subscription_id)
 // get get resource data 
 function get_resource_data($resource_ids)
 {
-    if (empty($resource_ids)) {
-        return false;
+    if (empty($resource_ids) || !is_array($resource_ids)) {
+        return array();
     }
     $args = array(
         'post_type' => 'resource',
@@ -439,6 +424,17 @@ function cop_parse_single_css_part($part) {
     }
 
     return $result;
+}
+
+/**
+ * Normalizes a URL by converting to lowercase, trimming trailing slash, and removing protocols/www prefix.
+ */
+function cop_normalize_url($url) {
+    $url = trim($url);
+    $url = strtolower($url);
+    $url = rtrim($url, '/');
+    $url = preg_replace('/^https?:\/\/(www\.)?/', '', $url);
+    return $url;
 }
 
 

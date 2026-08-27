@@ -88,6 +88,7 @@ function display_custom_meta_box($post)
     $source_feed_link = get_post_meta($post->ID, 'source_feed_link', true);
     $cop_sample_url = get_post_meta($post->ID, 'cop_sample_url', true);
 
+    wp_nonce_field('cop_save_resource_meta', 'cop_resource_nonce');
     ?>
     <!-- Injection of Selector Assistant -->
     <div class="cop-selector-assistant-box" style="direction: rtl; text-align: right; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px; margin-bottom: 25px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, sans-serif; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
@@ -498,6 +499,16 @@ function save_custom_meta_box($post_id)
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE)
         return;
 
+    // Verify nonce
+    if (!isset($_POST['cop_resource_nonce']) || !wp_verify_nonce($_POST['cop_resource_nonce'], 'cop_save_resource_meta')) {
+        return;
+    }
+
+    // Check post type
+    if (get_post_type($post_id) !== 'resource') {
+        return;
+    }
+
     // Save meta values
     if (isset($_POST['title_selector'])) {
         update_post_meta($post_id, 'title_selector', sanitize_text_field($_POST['title_selector']));
@@ -544,4 +555,4 @@ function save_custom_meta_box($post_id)
     }
 
 }
-add_action('save_post', 'save_custom_meta_box');
+add_action('save_post_resource', 'save_custom_meta_box');

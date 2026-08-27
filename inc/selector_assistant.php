@@ -91,10 +91,10 @@ function cop_ajax_test_selectors() {
     }
 
     $url = esc_url_raw($_POST['sample_url']);
-    $title_sel = sanitize_text_field($_POST['title_selector']);
-    $lead_sel = sanitize_text_field($_POST['lead_selector']);
-    $body_sel = sanitize_text_field($_POST['body_selector']);
-    $img_sel = sanitize_text_field($_POST['img_selector']);
+    $title_sel = sanitize_text_field(wp_unslash($_POST['title_selector']));
+    $lead_sel = sanitize_text_field(wp_unslash($_POST['lead_selector']));
+    $body_sel = sanitize_text_field(wp_unslash($_POST['body_selector']));
+    $img_sel = sanitize_text_field(wp_unslash($_POST['img_selector']));
 
     $html = cop_fetch_html_for_assistant($url);
     if (is_wp_error($html)) {

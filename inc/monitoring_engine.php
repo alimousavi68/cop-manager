@@ -174,7 +174,7 @@ function cop_test_single_resource($resource_id) {
 
     $xpath = new DOMXPath($dom);
 
-    // Helper function to test selector
+    // Helper function to test selector (Robust implementation with edge cases handled)
     $test_selector = function($selector, $dom_xpath, $type) {
         if (empty($selector)) return true; // if not set, ignore testing it
         
@@ -185,13 +185,32 @@ function cop_test_single_resource($resource_id) {
             return false;
         }
 
-        // Check if content is actually empty whitespace
-        if ($type != 'img') {
-            $content = trim($nodes->item(0)->textContent);
-            if (empty($content)) return false;
+        $node = $nodes->item(0);
+        $tag_name = strtolower($node->nodeName);
+        $content = '';
+
+        if ($tag_name === 'meta') {
+            // سناریو ۱: المان از جنس meta است (مثل متاتگ description یا og:image)
+            $content = trim($node->getAttribute('content'));
+        } elseif ($type === 'img') {
+            // سناریو ۲: هدف استخراج تصویر است
+            if ($tag_name === 'img') {
+                // تجمیع اتربیوت‌های رایج تصاویر برای اطمینان از خالی نبودن
+                $content = trim($node->getAttribute('src') . $node->getAttribute('data-src') . $node->getAttribute('data-lazy-src') . $node->getAttribute('srcset'));
+            } else {
+                // سناریو ۳: سلکتور تصویر به یک ظرف (Container/Wrapper) اشاره می‌کند
+                $sub_imgs = $dom_xpath->query('.//img', $node);
+                if ($sub_imgs && $sub_imgs->length > 0) {
+                    $sub_img = $sub_imgs->item(0);
+                    $content = trim($sub_img->getAttribute('src') . $sub_img->getAttribute('data-src') . $sub_img->getAttribute('data-lazy-src') . $sub_img->getAttribute('srcset'));
+                }
+            }
+        } else {
+            // سناریو ۴: تگ‌های استاندارد HTML دارای متن (مثل p, div, h1)
+            $content = trim($node->textContent);
         }
 
-        return true;
+        return !empty($content);
     };
 
     // Test Title
