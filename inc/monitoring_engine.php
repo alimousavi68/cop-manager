@@ -115,13 +115,10 @@ function cop_test_single_resource($resource_id) {
         return;
     }
 
-    // Step 3: Extract Link
-    $guid = '';
-    if (isset($first_item->guid)) {
-        $guid = ($need_merge == '1') ? rtrim($root_link, '/') . '/' . ltrim((string)$first_item->guid, '/') : (string)$first_item->guid;
-    } elseif (isset($first_item->link)) {
-        $guid = (string)$first_item->link;
-    }
+    // Step 3: Extract Link (smart resolution: supports absolute, relative, and link fallback)
+    $guid_raw  = isset($first_item->guid) ? (string) $first_item->guid : '';
+    $link_raw  = isset($first_item->link) ? (string) $first_item->link : '';
+    $guid = cop_resolve_feed_item_url($guid_raw, $link_raw, $root_link);
 
     if (empty($guid)) {
         cop_log_monitoring_result($resource_id, 'feed_error', 'لینک خبر (guid/link) در آیتم فید یافت نشد.');
