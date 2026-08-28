@@ -355,3 +355,136 @@ function save_plans_custom_meta_box($post_id)
     }
 }
 add_action('save_post_plans', 'save_plans_custom_meta_box');
+
+// Columns for Plans
+add_filter('manage_plans_posts_columns', 'cop_manage_plans_columns');
+function cop_manage_plans_columns($columns) {
+    $new_columns = array();
+    foreach ($columns as $key => $title) {
+        if ($key === 'date') {
+            $new_columns['plan_duration'] = 'مدت اعتبار';
+            $new_columns['plan_max_resources'] = 'سقف منابع';
+            $new_columns['plan_max_post_fetch'] = 'سقف روزانه';
+            $new_columns['plan_subscribers'] = 'مشترکین فعال';
+        }
+        $new_columns[$key] = $title;
+    }
+    return $new_columns;
+}
+
+add_action('manage_plans_posts_custom_column', 'cop_manage_plans_custom_column', 10, 2);
+function cop_manage_plans_custom_column($column, $post_id) {
+    switch ($column) {
+        case 'plan_duration':
+            $duration = get_post_meta($post_id, 'plan_duration', true);
+            echo '<span class="cop-badge cop-badge-neutral" style="font-size:12px;">' . esc_html($duration ? $duration . ' روز' : 'نامحدود') . '</span>';
+            break;
+        case 'plan_max_resources':
+            $max_resources = get_post_meta($post_id, 'plan_max_resources', true);
+            echo '<span class="cop-badge cop-badge-neutral" style="font-size:12px;">' . esc_html($max_resources ? $max_resources : 'نامحدود') . '</span>';
+            break;
+        case 'plan_max_post_fetch':
+            $max_fetch = get_post_meta($post_id, 'plan_max_post_fetch', true);
+            echo '<span class="cop-badge cop-badge-blue" style="font-size:12px;">' . esc_html($max_fetch ? $max_fetch : '0') . '</span>';
+            break;
+        case 'plan_subscribers':
+            $subs_query = new WP_Query(array(
+                'post_type' => 'subscriptions',
+                'post_status' => 'any',
+                'posts_per_page' => -1,
+                'fields' => 'ids',
+                'meta_query' => array(
+                    array(
+                        'key' => 'subscription_plan_id',
+                        'value' => $post_id,
+                        'compare' => '='
+                    )
+                )
+            ));
+            $subs_count = $subs_query->found_posts;
+            $url = admin_url('edit.php?post_type=subscriptions&meta_key=subscription_plan_id&meta_value=' . $post_id);
+            echo '<a href="' . esc_url($url) . '" class="cop-badge cop-badge-primary" style="text-decoration:none;font-size:12px;">' . esc_html($subs_count) . ' مشترک</a>';
+            break;
+    }
+}
+
+// Duplicate Plan Action
+add_filter('post_row_actions', 'cop_plan_duplicate_row_action', 10, 2);
+function cop_plan_duplicate_row_action($actions, $post) {
+    if ($post->post_type === 'plans' && current_user_can('edit_posts')) {
+        $nonce_url = wp_nonce_url(admin_url('admin-post.php?action=cop_duplicate_plan&post_id=' . $post->ID), 'cop_duplicate_plan_' . $post->ID);
+        $actions['duplicate'] = '<a href="' . esc_url($nonce_url) . '" title="کپی کردن این پلن" class="cop-btn cop-btn-neutral" style="font-size:11px; padding:2px 6px;">کپی پلن</a>';
+    }
+    return $actions;
+}
+
+add_action('admin_post_cop_duplicate_plan', 'cop_duplicate_plan_action');
+function cop_duplicate_plan_action() {
+    if (!isset($_GET['post_id']) || !isset($_GET['_wpnonce'])) {
+        wp_die('درخواست نامعتبر است.');
+    }
+    
+    $post_id = intval($_GET['post_id']);
+    
+    if (!wp_verify_nonce($_GET['_wpnonce'], 'cop_duplicate_plan_' . $post_id)) {
+        wp_die('عدم تایید اصالت درخواست.');
+    }
+    
+    if (!current_user_can('edit_posts')) {
+        wp_die('شما دسترسی لازم را ندارید.');
+    }
+    
+    $post = get_post($post_id);
+    if (!$post || $post->post_type !== 'plans') {
+        wp_die('پلن یافت نشد.');
+    }
+    
+    $current_user = wp_get_current_user();
+    $new_post_args = array(
+        'post_title' => $post->post_title . ' (کپی)',
+        'post_status' => 'draft',
+        'post_type' => $post->post_type,
+        'post_author' => $current_user->ID,
+    );
+    
+    $new_post_id = wp_insert_post($new_post_args);
+    
+    if ($new_post_id) {
+        $meta_keys = get_post_custom($post_id);
+        foreach ($meta_keys as $key => $values) {
+            foreach ($values as $value) {
+                add_post_meta($new_post_id, $key, maybe_unserialize($value));
+            }
+        }
+        wp_redirect(admin_url('post.php?action=edit&post=' . $new_post_id));
+        exit;
+    } else {
+        wp_die('خطا در کپی پلن.');
+    }
+}
+
+// ---------------------------------------------------------
+// Phase 5.1: Block Plan deletion if it has subscribers
+// ---------------------------------------------------------
+add_action('wp_trash_post', 'cop_block_plan_trash_if_has_subscribers');
+function cop_block_plan_trash_if_has_subscribers($post_id) {
+    if (get_post_type($post_id) === 'plans') {
+        $subs_query = new WP_Query(array(
+            'post_type' => 'subscriptions',
+            'post_status' => 'any',
+            'posts_per_page' => 1,
+            'fields' => 'ids',
+            'meta_query' => array(
+                array(
+                    'key' => 'subscription_plan_id',
+                    'value' => $post_id,
+                    'compare' => '='
+                )
+            )
+        ));
+        
+        if ($subs_query->found_posts > 0) {
+            wp_die('<div style="font-family:tahoma,sans-serif; text-align:right; direction:rtl;"><h3>خطای امنیتی: حذف پلن مسدود شد!</h3><p>این پلن دارای <b>' . $subs_query->found_posts . '</b> مشترک است. برای جلوگیری از قطع دسترسی کلاینت‌ها، ابتدا باید مشترکین را به پلن دیگری منتقل کنید.</p><a href="javascript:history.back()" style="display:inline-block; padding:10px 20px; background:#ef4444; color:#fff; text-decoration:none; border-radius:5px;">بازگشت</a></div>');
+        }
+    }
+}

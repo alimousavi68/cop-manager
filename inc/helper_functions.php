@@ -76,46 +76,9 @@ function cop_plans_list_dropdown($name, $class, $id, $selected_item)
 }
 
 
-//بازیابی لیست همه منابع در قالب دارپ داون
+// بازیابی لیست همه منابع در قالب دراپ‌داون (UI جدید: Resource Manager)
 function cop_resources_list_dropdown($name, $class, $id, $selected_items)
 {
-    $multiple_js_query =
-        "jQuery(document).ready(function($) {
-            function initResourcesSelect2() {
-                var planSelect = $('#subscription_plan_id');
-                var resourcesSelect = $('.resource_multiple');
-                
-                var selectedOption = planSelect.find('option:selected');
-                var maxRes = selectedOption.data('max-resources');
-                
-                var select2Args = {
-                    placeholder: 'انتخاب منابع',
-                    allowClear: true,
-                    width: 'resolve'
-                };
-                
-                if (maxRes !== undefined && maxRes !== '') {
-                    var maxLimit = parseInt(maxRes, 10);
-                    if (!isNaN(maxLimit) && maxLimit > 0) {
-                        select2Args.maximumSelectionLength = maxLimit;
-                    }
-                }
-                
-                if (resourcesSelect.hasClass('select2-hidden-accessible')) {
-                    resourcesSelect.select2('destroy');
-                }
-                
-                resourcesSelect.select2(select2Args);
-            }
-
-            initResourcesSelect2();
-
-            $('#subscription_plan_id').on('change', function() {
-                initResourcesSelect2();
-            });
-        });";
-    wp_add_inline_script('select2-js', $multiple_js_query);
-
     $args = array(
         'post_type' => 'resource',
         'post_status' => 'publish',
@@ -129,24 +92,143 @@ function cop_resources_list_dropdown($name, $class, $id, $selected_items)
     );
     $resources = new WP_Query($args);
 
-    $output = '<select name="' . $name . '[]" id="' . $id . '" class="select2 resource_multiple ' . $class . '" multiple="multiple" style="width: 100%;">';
-    $output .= '<option value="">منابع را انتخاب کنید</option>';
+    // Create mapping of all resources for quick lookup in JS
+    $resources_map = array();
+    $options_html = '<option value="">جستجو و افزودن منبع...</option>';
 
     if ($resources->have_posts()) {
         while ($resources->have_posts()) {
             $resources->the_post();
-            $is_selected = in_array(get_the_ID(), $selected_items) ? ' selected="selected"' : '';
-            $output .= sprintf(
-                '<option value="%s"%s>%s</option>',
-                esc_attr(get_the_ID()),
-                $is_selected,
-                esc_html(get_the_title())
+            $res_id = get_the_ID();
+            $res_title = get_the_title();
+            $resources_map[$res_id] = $res_title;
+            $options_html .= sprintf(
+                '<option value="%s">%s</option>',
+                esc_attr($res_id),
+                esc_html($res_title)
             );
         }
         wp_reset_postdata();
     }
 
-    $output .= '</select>';
+    // Prepare selected items HTML
+    $selected_html = '';
+    $inputs_html = '';
+    
+    if (!empty($selected_items) && is_array($selected_items)) {
+        foreach ($selected_items as $res_id) {
+            if (isset($resources_map[$res_id])) {
+                $inputs_html .= '<input type="hidden" name="' . esc_attr($name) . '[]" value="' . esc_attr($res_id) . '">';
+                $selected_html .= '<li data-id="' . esc_attr($res_id) . '" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#fff; border:1px solid var(--cop-slate-200); border-radius:6px; margin-bottom:8px; font-size:13px; color:var(--cop-slate-700); box-shadow:0 1px 2px rgba(0,0,0,0.02);">' . esc_html($resources_map[$res_id]) . ' <button type="button" class="cop-remove-res" style="background:none; border:none; color:var(--cop-danger); cursor:pointer; font-size:16px; padding:0; line-height:1; transition:0.2s;" onmouseover="this.style.color=\'#b91c1c\'" onmouseout="this.style.color=\'var(--cop-danger)\'">&times;</button></li>';
+            }
+        }
+    }
+
+    $js = "
+    jQuery(document).ready(function($) {
+        var map = " . json_encode($resources_map) . ";
+        var searchBox = $('#cop_res_search_" . esc_js($id) . "');
+        var listContainer = $('#cop_res_list_" . esc_js($id) . "');
+        var inputContainer = $('#cop_res_inputs_" . esc_js($id) . "');
+        var inputName = '" . esc_js($name) . "[]';
+        var planSelect = $('#subscription_plan_id');
+        
+        function getMaxRes() {
+            var selectedOption = planSelect.find('option:selected');
+            var maxRes = selectedOption.data('max-resources');
+            if (maxRes && parseInt(maxRes) > 0) return parseInt(maxRes);
+            return 9999;
+        }
+        
+        function updateCount() {
+            var currentCount = inputContainer.find('input').length;
+            var maxCount = getMaxRes();
+            $('#cop_res_count_" . esc_js($id) . "').text(currentCount + ' / ' + (maxCount === 9999 ? 'نامحدود' : maxCount));
+            
+            if (currentCount >= maxCount) {
+                searchBox.prop('disabled', true);
+            } else {
+                searchBox.prop('disabled', false);
+            }
+        }
+        
+        searchBox.select2({
+            width: '100%',
+            placeholder: 'جستجو و افزودن منبع...'
+        });
+        
+        searchBox.on('select2:select', function(e) {
+            var val = e.params.data.id;
+            if(!val) return;
+            
+            var currentCount = inputContainer.find('input').length;
+            var maxCount = getMaxRes();
+            
+            if (currentCount >= maxCount) {
+                alert('به سقف مجاز منابع در این پلن رسیده‌اید.');
+                searchBox.val(null).trigger('change');
+                return;
+            }
+            
+            // Check if already exists
+            if(inputContainer.find('input[value=\"' + val + '\"]').length > 0) {
+                searchBox.val(null).trigger('change');
+                return;
+            }
+            
+            var title = map[val] || val;
+            
+            // Add hidden input
+            inputContainer.append('<input type=\"hidden\" name=\"' + inputName + '\" value=\"' + val + '\">');
+            
+            // Add list item
+            listContainer.append('<li data-id=\"' + val + '\" style=\"display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#fff; border:1px solid var(--cop-slate-200); border-radius:6px; margin-bottom:8px; font-size:13px; color:var(--cop-slate-700); box-shadow:0 1px 2px rgba(0,0,0,0.02);\">' + title + ' <button type=\"button\" class=\"cop-remove-res\" style=\"background:none; border:none; color:var(--cop-danger); cursor:pointer; font-size:16px; padding:0; line-height:1; transition:0.2s;\" onmouseover=\"this.style.color=\\'#b91c1c\\'\" onmouseout=\"this.style.color=\\'var(--cop-danger)\\'\">&times;</button></li>');
+            
+            searchBox.val(null).trigger('change');
+            updateCount();
+            
+            // Scroll to bottom
+            listContainer.scrollTop(listContainer[0].scrollHeight);
+        });
+        
+        listContainer.on('click', '.cop-remove-res', function(e) {
+            e.preventDefault();
+            var li = $(this).closest('li');
+            var val = li.data('id');
+            li.remove();
+            inputContainer.find('input[value=\"' + val + '\"]').remove();
+            updateCount();
+        });
+        
+        planSelect.on('change', function() {
+            updateCount();
+        });
+        
+        updateCount();
+    });
+    ";
+
+    wp_add_inline_script('select2-js', $js);
+
+    $output = '<div class="cop-resource-manager" style="border: 1px solid var(--cop-slate-200); border-radius: 8px; overflow: hidden;">';
+    
+    // Header & Search
+    $output .= '<div style="background: var(--cop-slate-50); padding: 12px; border-bottom: 1px solid var(--cop-slate-200);">';
+    $output .= '<select id="cop_res_search_' . esc_attr($id) . '">' . $options_html . '</select>';
+    $output .= '</div>';
+    
+    // List container
+    $output .= '<div style="padding: 12px; background: #fff;">';
+    $output .= '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:12px; color:var(--cop-slate-500); font-weight:600;">';
+    $output .= '<span>منابع انتخاب شده</span>';
+    $output .= '<span id="cop_res_count_' . esc_attr($id) . '" class="cop-badge cop-badge-neutral" style="font-size:11px;">0</span>';
+    $output .= '</div>';
+    
+    $output .= '<div id="cop_res_inputs_' . esc_attr($id) . '">' . $inputs_html . '</div>';
+    $output .= '<ul id="cop_res_list_' . esc_attr($id) . '" style="margin:0; padding:4px; list-style:none; max-height:220px; overflow-y:auto; background:var(--cop-slate-50); border-radius:6px; min-height:60px;">' . $selected_html . '</ul>';
+    
+    $output .= '</div></div>';
+
     echo $output;
 }
 
@@ -191,16 +273,30 @@ function check_subscription_existence($subscription_site_url, $subscription_secr
         $db_site_url = get_post_meta($subscription_post->ID, 'subscription_site_url', true);
         
         if (cop_normalize_url($db_site_url) === cop_normalize_url($subscription_site_url)) {
+            // Use absolute expiry date (Phase 9)
+            $expiry_date = get_post_meta($subscription_post->ID, 'subscription_expiry_date', true);
+
+            // Fallback: if no expiry_date set yet, calculate and save it (migration on-the-fly)
+            if (empty($expiry_date)) {
+                $expiry_date = cop_calculate_expiry_date($subscription_post->ID);
+                if ($expiry_date) {
+                    update_post_meta($subscription_post->ID, 'subscription_expiry_date', $expiry_date);
+                }
+            }
+
+            // B-08 Fix: if still no expiry (no plan set), reject immediately
+            if (empty($expiry_date)) {
+                $result = false;
+                wp_reset_postdata();
+                return $result;
+            }
+
             $plan_id = get_post_meta($subscription_post->ID, 'subscription_plan_id', true);
             $plan_data = get_plan_data($plan_id);
-            $subscription_extra_days = get_post_meta($subscription_post->ID, 'subscription_extra_days', true) ? get_post_meta($subscription_post->ID, 'subscription_extra_days', true) : 0;
-            
-            $plan_duration = isset($plan_data['plan_duration']) ? intval($plan_data['plan_duration']) : 0;
             $plan_grace_period = isset($plan_data['plan_grace_period']) ? intval($plan_data['plan_grace_period']) : 0;
-            $days_elapsed = date('Y-m-d H:i:s', strtotime($subscription_post->post_date . ' + ' . $plan_duration . ' days + ' . intval($subscription_extra_days) . ' days'));
-            $grace_elapsed = date('Y-m-d H:i:s', strtotime($days_elapsed . ' + ' . $plan_grace_period . ' days'));
-           
-            if (current_time('mysql') > $grace_elapsed) {
+            $grace_end_ts = strtotime($expiry_date) + ($plan_grace_period * DAY_IN_SECONDS);
+
+            if (current_time('timestamp') > $grace_end_ts) {
                 $result = false;
             } else {
                 $result = $subscription_post->ID;
@@ -227,8 +323,19 @@ function get_subscription_data($subscription_id)
 
     if ($subscription->have_posts()) {
         $post_obj = $subscription->post;
+        
+        // Get absolute expiry date (Phase 9), migrate on-the-fly if missing
+        $expiry_date = get_post_meta($post_obj->ID, 'subscription_expiry_date', true);
+        if (empty($expiry_date)) {
+            $expiry_date = cop_calculate_expiry_date($post_obj->ID);
+            if ($expiry_date) {
+                update_post_meta($post_obj->ID, 'subscription_expiry_date', $expiry_date);
+            }
+        }
+        
         $subscription_data = array(
             'subscription_start_date' => $post_obj->post_date,
+            'subscription_expiry_date' => $expiry_date,
             'subscription_user_id' => get_post_meta($post_obj->ID, 'subscription_user_id', true),
             'subscription_site_url' => get_post_meta($post_obj->ID, 'subscription_site_url', true),
             'subscription_plan_id' => get_post_meta($post_obj->ID, 'subscription_plan_id', true),
@@ -241,6 +348,109 @@ function get_subscription_data($subscription_id)
 
     return $subscription_data;
 }
+
+/**
+ * Calculate expiry date from post_date + plan_duration + extra_days
+ * Used for on-the-fly migration of old subscriptions.
+ * @return string|false MySQL datetime or false if data is missing/invalid.
+ */
+function cop_calculate_expiry_date($post_id) {
+    $start_date = get_post_field('post_date', $post_id);
+    if (empty($start_date) || $start_date === '0000-00-00 00:00:00') return false;
+    
+    $plan_id = get_post_meta($post_id, 'subscription_plan_id', true);
+    $extra_days = (int) get_post_meta($post_id, 'subscription_extra_days', true);
+    
+    if (!$plan_id) return false;
+    
+    $plan_duration = (int) get_post_meta($plan_id, 'plan_duration', true);
+    if ($plan_duration <= 0) return false;
+    
+    $start_ts = strtotime($start_date);
+    if (!$start_ts || $start_ts === false) return false;
+    
+    $expiry_ts = $start_ts + (($plan_duration + $extra_days) * DAY_IN_SECONDS);
+    return date('Y-m-d H:i:s', $expiry_ts);
+}
+
+/**
+ * Renew a subscription by extending its expiry_date.
+ * If already expired: new expiry = today + plan_duration.
+ * If still active:    new expiry = current_expiry + plan_duration.
+ * This allows pre-booking renewals without wasting any days.
+ *
+ * @param int $post_id  Subscription post ID
+ * @param int $days     Number of days to extend (if 0, uses plan's duration)
+ * @return string|false New expiry date string on success, false on failure
+ */
+function cop_renew_subscription($post_id, $days = 0) {
+    $current_expiry = get_post_meta($post_id, 'subscription_expiry_date', true);
+    
+    // If no expiry date, calculate it first
+    if (empty($current_expiry)) {
+        $current_expiry = cop_calculate_expiry_date($post_id);
+    }
+    
+    // If still no expiry (no plan assigned), use today
+    if (empty($current_expiry)) {
+        $current_expiry = current_time('mysql');
+    }
+    
+    // Determine renewal days
+    if ($days <= 0) {
+        $plan_id = get_post_meta($post_id, 'subscription_plan_id', true);
+        $days = $plan_id ? (int) get_post_meta($plan_id, 'plan_duration', true) : 0;
+    }
+    
+    if ($days <= 0) return false;
+    
+    $current_ts = current_time('timestamp');
+    $expiry_ts = strtotime($current_expiry);
+    
+    // If expired: start fresh from today. If active: extend from current expiry.
+    $base_ts = ($expiry_ts < $current_ts) ? $current_ts : $expiry_ts;
+    $new_expiry_ts = $base_ts + ($days * DAY_IN_SECONDS);
+    $new_expiry = date('Y-m-d H:i:s', $new_expiry_ts);
+    
+    update_post_meta($post_id, 'subscription_expiry_date', $new_expiry);
+    
+    // Invalidate transient cache
+    $url = get_post_meta($post_id, 'subscription_site_url', true);
+    $secret = get_post_meta($post_id, 'subscription_secret_code', true);
+    if ($url && $secret) {
+        delete_transient('cop_val_' . md5($url . '_' . $secret));
+    }
+    
+    return $new_expiry;
+}
+
+/**
+ * Migrate all existing subscriptions to absolute expiry dates.
+ * Safe to run multiple times (skips already-migrated ones).
+ */
+function cop_migrate_subscriptions_to_expiry_date() {
+    if (get_option('cop_expiry_migration_done')) return;
+    
+    $all_subs = get_posts(array(
+        'post_type' => 'subscriptions',
+        'post_status' => 'any',
+        'posts_per_page' => -1,
+        'fields' => 'ids'
+    ));
+    
+    foreach ($all_subs as $post_id) {
+        $existing = get_post_meta($post_id, 'subscription_expiry_date', true);
+        if (!empty($existing)) continue; // already migrated
+        
+        $expiry = cop_calculate_expiry_date($post_id);
+        if ($expiry) {
+            update_post_meta($post_id, 'subscription_expiry_date', $expiry);
+        }
+    }
+    
+    update_option('cop_expiry_migration_done', '1');
+}
+add_action('admin_init', 'cop_migrate_subscriptions_to_expiry_date');
 
 //get retrive a plan data
 function get_plan_data($plan_id)

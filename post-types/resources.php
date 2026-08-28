@@ -556,3 +556,22 @@ function save_custom_meta_box($post_id)
 
 }
 add_action('save_post_resource', 'save_custom_meta_box');
+
+// ---------------------------------------------------------
+// Phase 5.2: Block Resource deletion if it is used by subscriptions
+// ---------------------------------------------------------
+add_action('wp_trash_post', 'cop_block_resource_trash_if_in_use');
+function cop_block_resource_trash_if_in_use($post_id) {
+    if (get_post_type($post_id) === 'resource') {
+        global $wpdb;
+        $in_use = $wpdb->get_var($wpdb->prepare("
+            SELECT COUNT(*) FROM {$wpdb->postmeta} 
+            WHERE meta_key = 'subscription_resources_ids' 
+            AND meta_value LIKE %s
+        ", '%"' . $post_id . '"%'));
+        
+        if ($in_use > 0) {
+            wp_die('<div style="font-family:tahoma,sans-serif; text-align:right; direction:rtl;"><h3>هشدار: حذف منبع مسدود شد!</h3><p>این منبع توسط <b>' . $in_use . '</b> اشتراک در حال استفاده است. حذف آن باعث اختلال در کلاینت‌های متصل می‌شود.</p><a href="javascript:history.back()" style="display:inline-block; padding:10px 20px; background:#f59e0b; color:#fff; text-decoration:none; border-radius:5px;">بازگشت</a></div>');
+        }
+    }
+}
