@@ -680,16 +680,7 @@ function display_custom_meta_box($post)
             <!-- Pills container -->
             <div id="cop-escape-pills" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; padding: 10px; background: var(--cop-bg-secondary, #f8fafc); border: 1px solid var(--cop-border, #e2e8f0); border-radius: 8px; margin-bottom: 12px;">
                 <?php
-                $escape_arr = array();
-                if (!empty($escape_elements)) {
-                    $decoded = json_decode($escape_elements, true);
-                    if (is_array($decoded)) {
-                        $escape_arr = $decoded;
-                    } elseif (is_string($escape_elements) && !empty(trim($escape_elements))) {
-                        // Migration: رشته قدیمی با خط جدید یا کاما
-                        $escape_arr = array_filter(array_map('trim', preg_split('/[\n,]+/', $escape_elements)));
-                    }
-                }
+                $escape_arr = cop_flatten_escape_elements($escape_elements);
                 if (empty($escape_arr)): ?>
                     <span id="cop-escape-empty-hint" style="color: #94a3b8; font-size: 12px; align-self: center; width: 100%; text-align: center;">
                         هنوز سلکتوری اضافه نشده. از دکمه‌های بالا یا فیلد زیر اضافه کنید.
@@ -784,9 +775,39 @@ function save_custom_meta_box($post_id)
     if (isset($_POST['tags_selector'])) {
         update_post_meta($post_id, 'tags_selector', sanitize_text_field($_POST['tags_selector']));
     }
+function cop_flatten_escape_elements($input) {
+    $result = array();
+    if (empty($input)) return $result;
+    
+    $items = is_array($input) ? $input : array($input);
+    foreach ($items as $item) {
+        if (!is_string($item)) continue;
+        $item = trim(wp_unslash($item));
+        if (empty($item)) continue;
+        
+        if (substr($item, 0, 1) === '[' && substr($item, -1) === ']') {
+            $decoded = json_decode($item, true);
+            if (is_array($decoded)) {
+                $result = array_merge($result, cop_flatten_escape_elements($decoded));
+                continue;
+            }
+        }
+        
+        if (strpos($item, "\n") !== false) {
+            $lines = explode("\n", $item);
+            $result = array_merge($result, cop_flatten_escape_elements($lines));
+            continue;
+        }
+        
+        $result[] = $item;
+    }
+    
+    return array_values(array_unique(array_filter($result)));
+}
+
     // Save escape_elements as JSON array (from Pill Manager hidden inputs)
-    if (isset($_POST['escape_elements']) && is_array($_POST['escape_elements'])) {
-        $selectors = array_values(array_filter(array_map('sanitize_text_field', wp_unslash($_POST['escape_elements']))));
+    if (isset($_POST['escape_elements']) && (is_array($_POST['escape_elements']) || is_string($_POST['escape_elements']))) {
+        $selectors = cop_flatten_escape_elements($_POST['escape_elements']);
         update_post_meta($post_id, 'escape_elements', wp_json_encode($selectors, JSON_UNESCAPED_UNICODE));
     } else {
         // No pills submitted → save empty array
