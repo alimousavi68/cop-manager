@@ -820,10 +820,10 @@ function save_custom_meta_box($post_id)
     // Save escape_elements as JSON array (from Pill Manager hidden inputs)
     if (isset($_POST['escape_elements']) && (is_array($_POST['escape_elements']) || is_string($_POST['escape_elements']))) {
         $selectors = cop_flatten_escape_elements($_POST['escape_elements']);
-        update_post_meta($post_id, 'escape_elements', wp_json_encode($selectors, JSON_UNESCAPED_UNICODE));
+        update_post_meta($post_id, 'escape_elements', wp_slash(wp_json_encode($selectors, JSON_UNESCAPED_UNICODE)));
     } else {
         // No pills submitted → save empty array
-        update_post_meta($post_id, 'escape_elements', '[]');
+        update_post_meta($post_id, 'escape_elements', wp_slash('[]'));
     }
     if (isset($_POST['source_root_link'])) {
         update_post_meta($post_id, 'source_root_link', sanitize_text_field($_POST['source_root_link']));
