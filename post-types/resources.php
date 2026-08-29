@@ -411,6 +411,11 @@ function display_custom_meta_box($post)
         var $pillsContainer = $('#cop-escape-pills');
         var $emptyHint      = $('#cop-escape-empty-hint');
 
+        // --- Helper: escape HTML attributes ---
+        function escapeHtmlAttr(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
         // --- Helper: add a pill ---
         function addEscapePill(selector) {
             selector = selector.trim();
@@ -439,14 +444,14 @@ function display_custom_meta_box($post)
 
             $emptyHint.hide();
             var $pill = $('<span class="cop-escape-pill" style="display: inline-flex; align-items: center; gap: 6px; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-family: monospace; direction: ltr;">' +
-                selector +
+                escapeHtmlAttr(selector) +
                 '<button type="button" class="cop-escape-pill-remove" style="background:none;border:none;cursor:pointer;color:#b91c1c;padding:0;line-height:1;font-size:14px;display:flex;" title="حذف">×</button>' +
-                '<input type="hidden" name="escape_elements[]" value="' + $('<div/>').text(selector).html() + '">' +
+                '<input type="hidden" name="escape_elements[]" value="' + escapeHtmlAttr(selector) + '">' +
                 '</span>');
             $pill.hide().appendTo($pillsContainer).fadeIn(200);
 
             // Mark suggested chip as added
-            $('#cop-escape-suggest-list').find('[data-selector="' + selector.replace(/"/g, '\\"') + '"]').addClass('cop-escape-chip-added')
+            $('#cop-escape-suggest-list').find('[data-selector="' + escapeHtmlAttr(selector) + '"]').addClass('cop-escape-chip-added')
                 .css({background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7', cursor: 'default', opacity: 0.7});
         }
 
@@ -511,8 +516,8 @@ function display_custom_meta_box($post)
                             if ($(this).val() === item.selector) { isAdded = true; }
                         });
                         var addedStyle = isAdded ? 'background:#d1fae5;color:#065f46;border-color:#6ee7b7;cursor:default;opacity:0.7;' : '';
-                        html += '<span class="cop-escape-chip" data-selector="' + $('<div/>').text(item.selector).html() + '" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:16px;font-size:11px;font-family:monospace;border:1px solid #fca5a5;background:#fff0f0;color:#991b1b;cursor:pointer;direction:ltr;' + addedStyle + '" title="' + $('<div/>').text(item.reason + ' | اطمینان: ' + item.confidence).html() + '">' +
-                            '<span style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + $('<div/>').text(item.selector).html() + '</span>' +
+                        html += '<span class="cop-escape-chip" data-selector="' + escapeHtmlAttr(item.selector) + '" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:16px;font-size:11px;font-family:monospace;border:1px solid #fca5a5;background:#fff0f0;color:#991b1b;cursor:pointer;direction:ltr;' + addedStyle + '" title="' + escapeHtmlAttr(item.reason + ' | اطمینان: ' + item.confidence) + '">' +
+                            '<span style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtmlAttr(item.selector) + '</span>' +
                             '<span style="font-family:sans-serif;font-size:10px;background:rgba(0,0,0,0.08);padding:1px 5px;border-radius:10px;">' + item.confidence + '</span>' +
                             '</span>';
                     });
