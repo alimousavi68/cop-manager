@@ -82,23 +82,9 @@ function cop_flatten_escape_elements($input) {
                 $result = array_merge($result, cop_flatten_escape_elements($decoded));
                 continue;
             }
-            
-            // Fallback for malformed JSON strings with unescaped quotes inside attribute selectors
-            $inner = trim(substr($item, 1, -1));
-            preg_match_all('/"(.*?)"|\'(.*?)\'|([^,\s]+)/', $inner, $matches);
-            $extracted = array();
-            if (!empty($matches[0])) {
-                foreach ($matches[0] as $m) {
-                    $m = trim($m, "'\" \t\n\r\0\x0B");
-                    if (!empty($m)) {
-                        $extracted[] = $m;
-                    }
-                }
-            }
-            if (!empty($extracted)) {
-                $result = array_merge($result, cop_flatten_escape_elements($extracted));
-                continue;
-            }
+            // If json_decode fails, it is likely a CSS attribute selector like [class*="ad"], not a JSON array.
+            $result[] = $item;
+            continue;
         }
         
         if (strpos($item, "\n") !== false) {
