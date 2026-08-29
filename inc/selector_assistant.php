@@ -500,7 +500,8 @@ function cop_ajax_suggest_escape_elements() {
     $noise_keywords = array('ad', 'ads', 'adv', 'advert', 'sponsor', 'promo', 'banner',
         'popup', 'modal', 'overlay', 'widget', 'sidebar',
         'recommend', 'suggest', 'related', 'share', 'social', 'print', 'tag-cloud',
-        'تبلیغ', 'بنر', 'مرتبط', 'پیشنهاد', 'اشتراک');
+        'تبلیغ', 'تبلیغات', 'بنر', 'مرتبط', 'پیشنهاد', 'اشتراک',
+        'adbox', 'adslot', 'adsense', 'tabligh', 'tablighat');
 
     $all_elements = @$xpath->query('.//*[@class or @id]', $body_node);
     $found_selectors = array();
@@ -513,19 +514,22 @@ function cop_ajax_suggest_escape_elements() {
             $el_id    = strtolower($el->getAttribute('id'));
 
             foreach ($noise_keywords as $keyword) {
-                $kw_lower = mb_strtolower($keyword, 'UTF-8');
-                if ((strpos($el_class, $kw_lower) !== false || strpos($el_id, $kw_lower) !== false)) {
+                $pattern = '/(^|[\s\-_])' . preg_quote($keyword, '/') . '([\s\-_]|$)/iu';
+                $match_class = preg_match($pattern, $el_class);
+                $match_id = preg_match($pattern, $el_id);
+
+                if ($match_class || $match_id) {
                     // Build a simple selector
                     $class_parts = array_filter(array_map('trim', explode(' ', $el_class)));
                     // Prefer a class that contains the keyword
                     $matching_class = '';
                     foreach ($class_parts as $cp) {
-                        if (strpos($cp, $kw_lower) !== false) {
+                        if (preg_match($pattern, $cp)) {
                             $matching_class = $cp;
                             break;
                         }
                     }
-                    if (!empty($el_id) && strpos($el_id, $kw_lower) !== false) {
+                    if (!empty($el_id) && preg_match($pattern, $el_id)) {
                         $sel = $tag . '#' . preg_replace('/[^a-zA-Z0-9_-]/', '', $el_id);
                     } elseif (!empty($matching_class)) {
                         $sel = $tag . '.' . preg_replace('/[^a-zA-Z0-9_-]/', '', $matching_class);
