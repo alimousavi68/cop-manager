@@ -358,16 +358,32 @@ function cop_ajax_suggest_escape_elements() {
     $body_node = $body_nodes->item(0);
     $candidates = array();
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // برای تضمین کامل اسکن فقط داخل body_selector، HTML آن نود را استخراج
+    // کرده و در یک DOMDocument کاملاً جدید بارگذاری می‌کنیم.
+    // این روش مطمئن‌ترین راه برای محدود کردن scope است و به رفتار libxml
+    // در مورد context node وابسته نیست.
+    // ─────────────────────────────────────────────────────────────────────────
+    $body_html = $dom->saveHTML($body_node);
+    $body_dom  = new DOMDocument();
+    libxml_use_internal_errors(true);
+    @$body_dom->loadHTML(
+        '<?xml encoding="UTF-8">' . $body_html,
+        LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+    );
+    libxml_clear_errors();
+    $body_xpath = new DOMXPath($body_dom);
+
     /**
-     * Helper: add a candidate if the selector finds at least one element WITHIN body_node
+     * Helper: add a candidate only if the selector finds at least one element
+     * within the isolated body DOM (guaranteed to be inside body_selector).
      */
-    $add_if_found = function($selector, $label, $reason, $confidence) use (&$candidates, $xpath, $body_node) {
+    $add_if_found = function($selector, $label, $reason, $confidence) use (&$candidates, $body_xpath) {
         $xp = cop_css_to_xpath($selector);
         if (empty($xp)) return;
 
-        // کوئری نسبی فقط درون نود بدنه خبر
-        $relative_xp = (strpos($xp, '//') === 0) ? '.' . $xp : './/' . ltrim($xp, '/');
-        $nodes = @$xpath->query($relative_xp, $body_node);
+        // همه کوئری‌ها روی DOM ایزوله‌شده بدنه خبر اجرا می‌شوند
+        $nodes = @$body_xpath->query($xp);
         if ($nodes && $nodes->length > 0) {
             $candidates[] = array(
                 'selector'   => $selector,
@@ -503,7 +519,7 @@ function cop_ajax_suggest_escape_elements() {
         'تبلیغ', 'تبلیغات', 'بنر', 'مرتبط', 'پیشنهاد', 'اشتراک',
         'adbox', 'adslot', 'adsense', 'tabligh', 'tablighat');
 
-    $all_elements = @$xpath->query('.//*[@class or @id]', $body_node);
+    $all_elements = @$body_xpath->query('//*[@class or @id]');
     $found_selectors = array();
     if ($all_elements) {
         foreach ($all_elements as $el) {
