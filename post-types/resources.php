@@ -786,8 +786,8 @@ function save_custom_meta_box($post_id)
     }
     // Save escape_elements as JSON array (from Pill Manager hidden inputs)
     if (isset($_POST['escape_elements']) && is_array($_POST['escape_elements'])) {
-        $selectors = array_values(array_filter(array_map('sanitize_text_field', $_POST['escape_elements'])));
-        update_post_meta($post_id, 'escape_elements', wp_json_encode($selectors));
+        $selectors = array_values(array_filter(array_map('sanitize_text_field', wp_unslash($_POST['escape_elements']))));
+        update_post_meta($post_id, 'escape_elements', wp_json_encode($selectors, JSON_UNESCAPED_UNICODE));
     } else {
         // No pills submitted → save empty array
         update_post_meta($post_id, 'escape_elements', '[]');
@@ -812,6 +812,9 @@ function save_custom_meta_box($post_id)
         update_post_meta($post_id, 'need_to_merge_guid_link', 0);
     }
 
+    // Clear API caches so clients get the latest configuration immediately
+    global $wpdb;
+    $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_cop_val_%' OR option_name LIKE '_transient_timeout_cop_val_%'");
 }
 add_action('save_post_resource', 'save_custom_meta_box');
 
