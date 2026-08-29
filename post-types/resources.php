@@ -404,6 +404,177 @@ function display_custom_meta_box($post)
             }, 1000);
             $('#cop_discovered_feeds_wrapper').slideUp(200);
         });
+
+        // ═══════════════════════════════════════════════════════════
+        // Escape Elements Pill Manager
+        // ═══════════════════════════════════════════════════════════
+        var $pillsContainer = $('#cop-escape-pills');
+        var $emptyHint      = $('#cop-escape-empty-hint');
+
+        // --- Helper: add a pill ---
+        function addEscapePill(selector) {
+            selector = selector.trim();
+            if (!selector) return;
+
+            // Dedup check
+            var exists = false;
+            $pillsContainer.find('input[name="escape_elements[]"]').each(function() {
+                if ($(this).val() === selector) { exists = true; }
+            });
+            if (exists) {
+                // Flash existing pill
+                $pillsContainer.find('.cop-escape-pill').each(function() {
+                    if ($(this).find('input').val() === selector) {
+                        $(this).animate({opacity: 0.3}, 200).animate({opacity: 1}, 200);
+                    }
+                });
+                return;
+            }
+
+            // Warn if selector is too generic
+            var genericSelectors = ['div', 'span', 'p', 'a', 'ul', 'li', 'section', 'article', 'main'];
+            if (genericSelectors.indexOf(selector.toLowerCase()) !== -1) {
+                if (!confirm('⚠️ سلکتور «' + selector + '» خیلی عام است و ممکن است محتوای اصلی را هم حذف کند.\nآیا مطمئن هستید؟')) return;
+            }
+
+            $emptyHint.hide();
+            var $pill = $('<span class="cop-escape-pill" style="display: inline-flex; align-items: center; gap: 6px; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-family: monospace; direction: ltr;">' +
+                selector +
+                '<button type="button" class="cop-escape-pill-remove" style="background:none;border:none;cursor:pointer;color:#b91c1c;padding:0;line-height:1;font-size:14px;display:flex;" title="حذف">×</button>' +
+                '<input type="hidden" name="escape_elements[]" value="' + $('<div/>').text(selector).html() + '">' +
+                '</span>');
+            $pill.hide().appendTo($pillsContainer).fadeIn(200);
+
+            // Mark suggested chip as added
+            $('#cop-escape-suggest-list').find('[data-selector="' + selector.replace(/"/g, '\\"') + '"]').addClass('cop-escape-chip-added')
+                .css({background: '#d1fae5', color: '#065f46', borderColor: '#6ee7b7', cursor: 'default', opacity: 0.7});
+        }
+
+        // --- Helper: sync empty hint ---
+        function syncEmptyHint() {
+            var hasPills = $pillsContainer.find('.cop-escape-pill').length > 0;
+            $emptyHint.toggle(!hasPills);
+        }
+
+        // Remove pill
+        $(document).on('click', '.cop-escape-pill-remove', function() {
+            $(this).closest('.cop-escape-pill').fadeOut(200, function() {
+                $(this).remove();
+                syncEmptyHint();
+            });
+        });
+
+        // Manual add via button or Enter
+        $('#cop-escape-add-btn').on('click', function() {
+            var val = $('#cop-escape-manual-input').val().trim();
+            if (val) { addEscapePill(val); $('#cop-escape-manual-input').val(''); }
+        });
+        $('#cop-escape-manual-input').on('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); $('#cop-escape-add-btn').trigger('click'); }
+        });
+
+        // --- Smart Suggest ---
+        $('#cop_btn_suggest_escape').on('click', function(e) {
+            e.preventDefault();
+            var sampleUrl = $('#cop_sample_url').val();
+            if (!sampleUrl) {
+                alert('لطفاً ابتدا آدرس یک خبر نمونه را در کادر دستیار بالا وارد کنید.');
+                return;
+            }
+            var $btn = $(this);
+            $btn.prop('disabled', true).html('<svg style="width:14px;height:14px;animation:spin 1s linear infinite" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> در حال تحلیل...');
+            $('#cop-escape-suggest-wrapper').hide();
+
+            $.post(ajaxurl, {
+                action: 'cop_suggest_escape_elements',
+                sample_url: sampleUrl,
+                security: '<?php echo wp_create_nonce("cop_selector_assistant_nonce"); ?>'
+            }, function(response) {
+                $btn.prop('disabled', false).html('<svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"/></svg> پیشنهاد هوشمند');
+
+                if (response.success && response.data.escape_candidates && response.data.escape_candidates.length > 0) {
+                    var html = '';
+                    response.data.escape_candidates.forEach(function(item) {
+                        var isAdded = false;
+                        $pillsContainer.find('input[name="escape_elements[]"]').each(function() {
+                            if ($(this).val() === item.selector) { isAdded = true; }
+                        });
+                        var addedStyle = isAdded ? 'background:#d1fae5;color:#065f46;border-color:#6ee7b7;cursor:default;opacity:0.7;' : '';
+                        html += '<span class="cop-escape-chip" data-selector="' + $('<div/>').text(item.selector).html() + '" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:16px;font-size:11px;font-family:monospace;border:1px solid #fca5a5;background:#fff0f0;color:#991b1b;cursor:pointer;direction:ltr;' + addedStyle + '" title="' + $('<div/>').text(item.reason + ' | اطمینان: ' + item.confidence).html() + '">' +
+                            '<span style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + $('<div/>').text(item.selector).html() + '</span>' +
+                            '<span style="font-family:sans-serif;font-size:10px;background:rgba(0,0,0,0.08);padding:1px 5px;border-radius:10px;">' + item.confidence + '</span>' +
+                            '</span>';
+                    });
+                    $('#cop-escape-suggest-list').html(html);
+                    $('#cop-escape-suggest-wrapper').slideDown(200);
+                } else if (response.success) {
+                    alert('هیچ المان قابل حذف مشکوکی در این صفحه یافت نشد. صفحه نمونه را بررسی کنید یا سلکتور را به صورت دستی اضافه کنید.');
+                } else {
+                    alert(response.data.message || 'خطا در تحلیل صفحه');
+                }
+            }).fail(function() {
+                $btn.prop('disabled', false).html('✨ پیشنهاد هوشمند');
+                alert('ارتباط با سرور برقرار نشد.');
+            });
+        });
+
+        // Click on suggested chip → add to pills
+        $(document).on('click', '.cop-escape-chip:not(.cop-escape-chip-added)', function() {
+            addEscapePill($(this).data('selector'));
+        });
+
+        // --- Visual Escape Mode ---
+        // Uses the existing visual iframe but in "escape mode"
+        // Click → adds to escape list instead of replacing a field
+        var isEscapeMode = false;
+
+        $('.cop-btn-visual-select-escape').on('click', function(e) {
+            e.preventDefault();
+            var sampleUrl = $('#cop_sample_url').val();
+            if (!sampleUrl) {
+                alert('لطفاً ابتدا آدرس یک خبر نمونه را وارد کنید.');
+                return;
+            }
+            isEscapeMode = true;
+            $('#cop-modal-active-field-label').text('🚫 حذف المان').css('background', '#dc2626');
+            var proxyUrl = '<?php echo admin_url("admin-post.php?action=cop_proxy_page"); ?>&sample_url=' + encodeURIComponent(sampleUrl);
+            $('#cop-visual-iframe').attr('src', proxyUrl);
+            $('#cop-visual-modal').fadeIn(200);
+        });
+
+        // Patch the existing message handler to handle escape mode
+        // We re-listen with a flag — original handler is in window.addEventListener above,
+        // but we intercept via a custom check in the existing handler flow.
+        // For clean separation, we add our own listener with a mode check.
+        window.addEventListener('message', function(eMsg) {
+            if (!isEscapeMode) return; // handled by original listener
+            if (eMsg.data && eMsg.data.action === 'cop_visual_clicked_options' && isEscapeMode) {
+                var selectors = eMsg.data.selectors;
+                if (selectors && selectors.length > 0) {
+                    // Auto-pick best selector and add to escape list
+                    var bestSel = selectors[0].selector;
+                    addEscapePill(bestSel);
+                    // Show a brief toast inside the modal header
+                    var $label = $('#cop-modal-active-field-label');
+                    $label.text('✅ اضافه شد: ' + bestSel).css('background','#16a34a');
+                    setTimeout(function() {
+                        $label.text('🚫 حذف المان').css('background','#dc2626');
+                    }, 2000);
+                }
+            }
+        });
+
+        // Reset escape mode on modal close
+        var _origModalCancel = $('#cop-modal-cancel').off('click').on('click', function(e) {
+            e.preventDefault();
+            isEscapeMode = false;
+            $('#cop-modal-active-field-label').css('background', '#4f46e5');
+            $('#cop-visual-modal').fadeOut(200, function() {
+                $('#cop-visual-iframe').attr('src', '');
+                $('#cop-selector-choices-container').hide();
+                $('#cop-selector-choices-list').empty();
+            });
+        });
     });
     </script>
 
@@ -468,9 +639,75 @@ function display_custom_meta_box($post)
         <input type="text" id="tags_selector" name="tags_selector" class="widefat"
             value="<?php echo esc_attr($tags_selector); ?>"><br><br>
 
-        <label for="escape_elements">Escape Elements:</label><br>
-        <textarea id="escape_elements" name="escape_elements"
-            class="widefat"><?php echo esc_textarea($escape_elements); ?></textarea><br><br>
+        <div class="cop-form-card" style="margin-bottom: 20px; direction: rtl;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+                <div>
+                    <h4 style="margin: 0 0 4px 0; font-size: 14px; color: var(--cop-text-primary, #1e293b); display: flex; align-items: center; gap: 8px;">
+                        🚫 المان‌های حذف‌شونده از بدنه خبر
+                    </h4>
+                    <p style="margin: 0; font-size: 12px; color: var(--cop-text-muted, #64748b);">
+                        CSS selectorهایی که قبل از استخراج بدنه خبر حذف می‌شوند (تبلیغات، اخبار مرتبط و…)
+                    </p>
+                </div>
+                <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                    <button type="button" id="cop_btn_suggest_escape" class="cop-btn cop-btn-neutral" style="font-size: 12px;" title="پیشنهاد خودکار المان‌های قابل حذف از طریق تحلیل صفحه نمونه">
+                        <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"/></svg>
+                        پیشنهاد هوشمند
+                    </button>
+                    <button type="button" class="cop-btn cop-btn-secondary cop-btn-visual-select-escape" title="انتخاب بصری المان برای حذف از روی صفحه نمونه">
+                        <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"/></svg>
+                        انتخاب بصری
+                    </button>
+                </div>
+            </div>
+
+            <!-- Pills container -->
+            <div id="cop-escape-pills" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; padding: 10px; background: var(--cop-bg-secondary, #f8fafc); border: 1px solid var(--cop-border, #e2e8f0); border-radius: 8px; margin-bottom: 12px;">
+                <?php
+                $escape_arr = array();
+                if (!empty($escape_elements)) {
+                    $decoded = json_decode($escape_elements, true);
+                    if (is_array($decoded)) {
+                        $escape_arr = $decoded;
+                    } elseif (is_string($escape_elements) && !empty(trim($escape_elements))) {
+                        // Migration: رشته قدیمی با خط جدید یا کاما
+                        $escape_arr = array_filter(array_map('trim', preg_split('/[\n,]+/', $escape_elements)));
+                    }
+                }
+                if (empty($escape_arr)): ?>
+                    <span id="cop-escape-empty-hint" style="color: #94a3b8; font-size: 12px; align-self: center; width: 100%; text-align: center;">
+                        هنوز سلکتوری اضافه نشده. از دکمه‌های بالا یا فیلد زیر اضافه کنید.
+                    </span>
+                <?php else: $escape_arr = array_values($escape_arr); ?>
+                    <span id="cop-escape-empty-hint" style="display:none;"></span>
+                <?php endif;
+                foreach ($escape_arr as $esc_sel): ?>
+                    <span class="cop-escape-pill" style="display: inline-flex; align-items: center; gap: 6px; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-family: monospace; direction: ltr;">
+                        <?php echo esc_html($esc_sel); ?>
+                        <button type="button" class="cop-escape-pill-remove" data-selector="<?php echo esc_attr($esc_sel); ?>" style="background: none; border: none; cursor: pointer; color: #b91c1c; padding: 0; line-height: 1; font-size: 14px; display: flex;" title="حذف این سلکتور">×</button>
+                        <input type="hidden" name="escape_elements[]" value="<?php echo esc_attr($esc_sel); ?>">
+                    </span>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Manual input row -->
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="cop-escape-manual-input" placeholder="مثال: div.ad-box یا .related-news" style="flex: 1; padding: 8px 12px; border: 1px solid var(--cop-border, #e2e8f0); border-radius: 8px; font-size: 13px; font-family: monospace; direction: ltr;" />
+                <button type="button" id="cop-escape-add-btn" class="cop-btn cop-btn-secondary" style="font-size: 13px; white-space: nowrap;">
+                    + افزودن
+                </button>
+            </div>
+
+            <!-- Smart Suggest Results -->
+            <div id="cop-escape-suggest-wrapper" style="display:none; margin-top: 14px;">
+                <div style="font-size: 12px; font-weight: 600; color: #1e293b; margin-bottom: 10px;">
+                    ✨ پیشنهادات هوشمند — روی هر مورد کلیک کنید تا اضافه شود:
+                </div>
+                <div id="cop-escape-suggest-list" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+            </div>
+        </div>
+        <!-- /Escape Elements Manager -->
+
 
         <label for="source_root_link">Source root Link: </label><br>
         <input type="text" id="source_root_link" name="source_root_link" class="widefat"
@@ -531,8 +768,13 @@ function save_custom_meta_box($post_id)
     if (isset($_POST['tags_selector'])) {
         update_post_meta($post_id, 'tags_selector', sanitize_text_field($_POST['tags_selector']));
     }
-    if (isset($_POST['escape_elements'])) {
-        update_post_meta($post_id, 'escape_elements', sanitize_textarea_field($_POST['escape_elements']));
+    // Save escape_elements as JSON array (from Pill Manager hidden inputs)
+    if (isset($_POST['escape_elements']) && is_array($_POST['escape_elements'])) {
+        $selectors = array_values(array_filter(array_map('sanitize_text_field', $_POST['escape_elements'])));
+        update_post_meta($post_id, 'escape_elements', wp_json_encode($selectors));
+    } else {
+        // No pills submitted → save empty array
+        update_post_meta($post_id, 'escape_elements', '[]');
     }
     if (isset($_POST['source_root_link'])) {
         update_post_meta($post_id, 'source_root_link', sanitize_text_field($_POST['source_root_link']));

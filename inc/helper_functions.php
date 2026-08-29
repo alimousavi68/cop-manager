@@ -529,7 +529,7 @@ function get_resource_data($resource_ids)
                 'bup_date_selector' => get_post_meta(get_the_ID(), 'bup_date_selector', true),
                 'category_selector' => get_post_meta(get_the_ID(), 'category_selector', true),
                 'tags_selector' => get_post_meta(get_the_ID(), 'tags_selector', true),
-                'escape_elements' => get_post_meta(get_the_ID(), 'escape_elements', true),
+                'escape_elements' => get_post_meta(get_the_ID(), 'escape_elements', true) ?: '[]',
                 'source_root_link' => get_post_meta(get_the_ID(), 'source_root_link', true),
                 'source_feed_link' => get_post_meta(get_the_ID(), 'source_feed_link', true),
                 'need_to_merge_guid_link' => get_post_meta(get_the_ID(), 'need_to_merge_guid_link', true),

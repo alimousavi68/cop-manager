@@ -8,6 +8,7 @@ if (!defined('ABSPATH')) {
 add_action('wp_ajax_cop_test_selectors', 'cop_ajax_test_selectors');
 add_action('wp_ajax_cop_suggest_selectors', 'cop_ajax_suggest_selectors');
 add_action('wp_ajax_cop_discover_feed_url', 'cop_ajax_discover_feed_url');
+add_action('wp_ajax_cop_suggest_escape_elements', 'cop_ajax_suggest_escape_elements');
 
 /**
  * Helper to fetch HTML content and handle encodings
@@ -308,6 +309,243 @@ function cop_ajax_suggest_selectors() {
     $suggestions['body'] = array_slice($body_candidates, 0, 3);
 
     wp_send_json_success($suggestions);
+}
+
+/**
+ * Action: Analyze page DOM and suggest escape/removal candidates
+ * Uses 8 detection strategies based on common patterns of noise elements
+ */
+function cop_ajax_suggest_escape_elements() {
+    check_ajax_referer('cop_selector_assistant_nonce', 'security');
+
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => 'دسترسی غیرمجاز.'));
+    }
+
+    $url = esc_url_raw($_POST['sample_url']);
+    if (empty($url)) {
+        wp_send_json_error(array('message' => 'آدرس نمونه خالی است.'));
+    }
+
+    $html = cop_fetch_html_for_assistant($url);
+    if (is_wp_error($html)) {
+        wp_send_json_error(array('message' => 'خطا در واکشی صفحه: ' . $html->get_error_message()));
+    }
+
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    @$dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    libxml_clear_errors();
+    $xpath = new DOMXPath($dom);
+
+    $candidates = array();
+
+    /**
+     * Helper: add a candidate if the selector finds at least one element
+     */
+    $add_if_found = function($selector, $label, $reason, $confidence) use (&$candidates, $xpath) {
+        $xp = cop_css_to_xpath($selector);
+        if (empty($xp)) return;
+        $nodes = @$xpath->query($xp);
+        if ($nodes && $nodes->length > 0) {
+            $candidates[] = array(
+                'selector'   => $selector,
+                'label'      => $label,
+                'reason'     => $reason,
+                'confidence' => $confidence,
+                'count'      => $nodes->length,
+            );
+        }
+    };
+
+    // ─────────────────────────────────────────────
+    // Strategy 1: تبلیغات — Ad Containers
+    // ─────────────────────────────────────────────
+    $ad_patterns = array(
+        '.ad'            => array('تبلیغ عمومی', 'کلاس استاندارد کانتینر تبلیغاتی', '90%'),
+        '.ads'           => array('تبلیغات', 'کلاس جمع تبلیغات', '90%'),
+        '.advertisement' => array('تبلیغ (advertisement)', 'کلاس انگلیسی رسمی تبلیغ', '92%'),
+        '.ad-container'  => array('کانتینر تبلیغ', 'کلاس رایج برای wrapper تبلیغات', '88%'),
+        '.ad-banner'     => array('بنر تبلیغاتی', 'بنرهای تبلیغاتی معمولاً داخل بدنه خبر', '87%'),
+        '.ad-box'        => array('باکس تبلیغاتی', 'باکس تبلیغاتی درون محتوا', '87%'),
+        '.tedad'         => array('تبلیغ (تداد)', 'سرویس تبلیغاتی رایج در سایت‌های ایرانی', '85%'),
+        '.taboola'       => array('تبلیغ (تابولا)', 'ویجت تبلیغاتی تابولا', '95%'),
+        '.outbrain'      => array('تبلیغ (اوت‌براین)', 'ویجت تبلیغاتی اوت‌براین', '95%'),
+        '[id*="advert"]' => array('کانتینر تبلیغ (id)', 'المان با شناسه حاوی کلمه advert', '80%'),
+        '[class*="advert"]' => array('کانتینر تبلیغ (class)', 'المان با کلاس حاوی کلمه advert', '80%'),
+        '.google-ad'     => array('تبلیغ گوگل', 'ویجت Google AdSense', '93%'),
+        'ins.adsbygoogle' => array('AdSense', 'تبلیغ گوگل AdSense', '97%'),
+    );
+    foreach ($ad_patterns as $sel => $info) {
+        $add_if_found($sel, $info[0], $info[1], $info[2]);
+    }
+
+    // ─────────────────────────────────────────────
+    // Strategy 2: اخبار مرتبط — Related News
+    // ─────────────────────────────────────────────
+    $related_patterns = array(
+        '.related'          => array('اخبار مرتبط', 'کانتینر رایج اخبار مرتبط', '85%'),
+        '.related-news'     => array('اخبار مرتبط', 'کلاس مستقیم اخبار مرتبط', '90%'),
+        '.related-posts'    => array('پست‌های مرتبط', 'پست‌های مرتبط وردپرسی', '88%'),
+        '.related-articles' => array('مقالات مرتبط', 'مقالات مرتبط استاندارد', '88%'),
+        '.news-related'     => array('اخبار مرتبط', 'کلاس فارسی رایج', '85%'),
+        '[class*="related"]' => array('مرتبط (عمومی)', 'هر المانی با کلاس حاوی related', '75%'),
+        '.suggested-news'   => array('اخبار پیشنهادی', 'پیشنهاد محتوای مرتبط', '85%'),
+        '.see-also'         => array('همچنین ببینید', 'بخش «همچنین ببینید»', '82%'),
+        '.read-more'        => array('بیشتر بخوانید', 'لینک‌های بیشتر بخوانید', '80%'),
+    );
+    foreach ($related_patterns as $sel => $info) {
+        $add_if_found($sel, $info[0], $info[1], $info[2]);
+    }
+
+    // ─────────────────────────────────────────────
+    // Strategy 3: اشتراک‌گذاری — Social Share
+    // ─────────────────────────────────────────────
+    $share_patterns = array(
+        '.share'             => array('اشتراک‌گذاری', 'باکس دکمه‌های اشتراک‌گذاری', '85%'),
+        '.social-share'      => array('شبکه اجتماعی', 'دکمه‌های شبکه اجتماعی', '88%'),
+        '.share-box'         => array('باکس اشتراک‌گذاری', 'باکس اشتراک‌گذاری خبر', '88%'),
+        '.share-buttons'     => array('دکمه‌های اشتراک', 'دکمه‌های share', '90%'),
+        '.social-buttons'    => array('دکمه‌های اجتماعی', 'دکمه‌های شبکه‌های اجتماعی', '88%'),
+        '[class*="share"]'   => array('اشتراک (عمومی)', 'هر المانی با کلاس حاوی share', '75%'),
+        '.addtoany'          => array('AddToAny', 'پلاگین اشتراک‌گذاری AddToAny', '95%'),
+        '.addthis_toolbox'   => array('AddThis', 'ابزار اشتراک‌گذاری AddThis', '97%'),
+    );
+    foreach ($share_patterns as $sel => $info) {
+        $add_if_found($sel, $info[0], $info[1], $info[2]);
+    }
+
+    // ─────────────────────────────────────────────
+    // Strategy 4: نظرات — Comments
+    // ─────────────────────────────────────────────
+    $comment_patterns = array(
+        '#comments'           => array('بخش نظرات (id)', 'بخش نظرات وردپرس', '92%'),
+        '.comments-area'      => array('ناحیه نظرات', 'wrapper استاندارد نظرات', '90%'),
+        '.comment-section'    => array('بخش نظرات', 'کلاس رایج بخش نظرات', '88%'),
+        '#comment-respond'    => array('فرم نظر', 'فرم ارسال نظر وردپرس', '92%'),
+        '.wp-comment-cookies-consent' => array('موافقت کوکی نظر', 'فرم موافقت کوکی نظرات', '90%'),
+    );
+    foreach ($comment_patterns as $sel => $info) {
+        $add_if_found($sel, $info[0], $info[1], $info[2]);
+    }
+
+    // ─────────────────────────────────────────────
+    // Strategy 5: اطلاعات نویسنده — Author Box
+    // ─────────────────────────────────────────────
+    $author_patterns = array(
+        '.author-box'      => array('باکس نویسنده', 'اطلاعات نویسنده', '85%'),
+        '.about-author'    => array('درباره نویسنده', 'بخش درباره نویسنده', '85%'),
+        '.author-profile'  => array('پروفایل نویسنده', 'پروفایل نویسنده خبر', '85%'),
+        '[rel="author"]'   => array('نویسنده (rel)', 'لینک با rel=author', '78%'),
+    );
+    foreach ($author_patterns as $sel => $info) {
+        $add_if_found($sel, $info[0], $info[1], $info[2]);
+    }
+
+    // ─────────────────────────────────────────────
+    // Strategy 6: ناوبری — Navigation/Breadcrumbs
+    // ─────────────────────────────────────────────
+    $nav_patterns = array(
+        '.breadcrumb'         => array('مسیر پیمایشی', 'بردکرامب (مسیر ناوبری)', '82%'),
+        '.breadcrumbs'        => array('مسیر پیمایشی', 'بردکرامب‌ها', '82%'),
+        'nav.post-nav'        => array('ناوبری پست', 'ناوبری بین پست‌های قبل/بعد', '80%'),
+        '.post-navigation'    => array('ناوبری خبر', 'بلوک ناوبری بین اخبار', '80%'),
+        '.nav-links'          => array('لینک‌های ناوبری', 'لینک‌های ناوبری صفحات', '78%'),
+        '.pagination'         => array('صفحه‌بندی', 'ناوبری صفحه‌بندی', '80%'),
+    );
+    foreach ($nav_patterns as $sel => $info) {
+        $add_if_found($sel, $info[0], $info[1], $info[2]);
+    }
+
+    // ─────────────────────────────────────────────
+    // Strategy 7: عضویت و نوتیفیکیشن — Newsletter/Popups
+    // ─────────────────────────────────────────────
+    $newsletter_patterns = array(
+        '.newsletter'         => array('خبرنامه', 'باکس عضویت در خبرنامه', '88%'),
+        '.subscribe'          => array('اشتراک', 'فرم اشتراک', '85%'),
+        '.notification-bar'   => array('نوار اطلاع‌رسانی', 'نوار اطلاع‌رسانی بالای صفحه', '83%'),
+        '.cookie-notice'      => array('کوکی', 'اعلان حریم خصوصی کوکی', '90%'),
+        '.popup'              => array('پاپ‌آپ', 'المان پاپ‌آپ', '85%'),
+        '[class*="newsletter"]' => array('خبرنامه (عمومی)', 'کلاس حاوی newsletter', '80%'),
+    );
+    foreach ($newsletter_patterns as $sel => $info) {
+        $add_if_found($sel, $info[0], $info[1], $info[2]);
+    }
+
+    // ─────────────────────────────────────────────
+    // Strategy 8: پویای DOM — Class/ID Keyword Scan
+    // بررسی تمام المان‌های DOM برای کلاس/ID‌های مشکوک
+    // ─────────────────────────────────────────────
+    $noise_keywords = array('ad', 'ads', 'adv', 'advert', 'sponsor', 'promo', 'banner',
+        'popup', 'modal', 'overlay', 'widget', 'sidebar', 'footer', 'header',
+        'recommend', 'suggest', 'related', 'share', 'social', 'print', 'tag-cloud',
+        'تبلیغ', 'بنر', 'مرتبط', 'پیشنهاد', 'اشتراک');
+
+    $all_elements = @$xpath->query('//*[@class or @id]');
+    $found_selectors = array();
+    if ($all_elements) {
+        foreach ($all_elements as $el) {
+            $tag = strtolower($el->nodeName);
+            if (in_array($tag, array('html', 'body', 'head', 'script', 'style', 'meta', 'link'))) continue;
+
+            $el_class = strtolower($el->getAttribute('class'));
+            $el_id    = strtolower($el->getAttribute('id'));
+
+            foreach ($noise_keywords as $keyword) {
+                $kw_lower = mb_strtolower($keyword, 'UTF-8');
+                if ((strpos($el_class, $kw_lower) !== false || strpos($el_id, $kw_lower) !== false)) {
+                    // Build a simple selector
+                    $class_parts = array_filter(array_map('trim', explode(' ', $el_class)));
+                    // Prefer a class that contains the keyword
+                    $matching_class = '';
+                    foreach ($class_parts as $cp) {
+                        if (strpos($cp, $kw_lower) !== false) {
+                            $matching_class = $cp;
+                            break;
+                        }
+                    }
+                    if (!empty($el_id) && strpos($el_id, $kw_lower) !== false) {
+                        $sel = $tag . '#' . preg_replace('/[^a-zA-Z0-9_-]/', '', $el_id);
+                    } elseif (!empty($matching_class)) {
+                        $sel = $tag . '.' . preg_replace('/[^a-zA-Z0-9_-]/', '', $matching_class);
+                    } else {
+                        continue;
+                    }
+
+                    if (!isset($found_selectors[$sel])) {
+                        $found_selectors[$sel] = true;
+                        $candidates[] = array(
+                            'selector'   => $sel,
+                            'label'      => 'شناسایی هوشمند (' . $keyword . ')',
+                            'reason'     => 'المان ' . $tag . ' با کلمه کلیدی «' . $keyword . '» در کلاس یا شناسه',
+                            'confidence' => '70%',
+                            'count'      => 1,
+                        );
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // Sort by confidence descending
+    usort($candidates, function($a, $b) {
+        return intval($b['confidence']) - intval($a['confidence']);
+    });
+
+    // Remove duplicates by selector
+    $seen   = array();
+    $unique = array();
+    foreach ($candidates as $c) {
+        if (!isset($seen[$c['selector']])) {
+            $seen[$c['selector']] = true;
+            $unique[] = $c;
+        }
+    }
+
+    wp_send_json_success(array(
+        'escape_candidates' => array_values(array_slice($unique, 0, 20)),
+    ));
 }
 
 // Register administrative action for proxied page
