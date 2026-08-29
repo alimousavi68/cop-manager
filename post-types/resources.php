@@ -58,6 +58,37 @@ function resouces_post_type()
 add_action('init', 'resouces_post_type', 0);
 
 
+// Helper: Flatten and normalize escape elements
+function cop_flatten_escape_elements($input) {
+    $result = array();
+    if (empty($input)) return $result;
+    
+    $items = is_array($input) ? $input : array($input);
+    foreach ($items as $item) {
+        if (!is_string($item)) continue;
+        $item = trim(wp_unslash($item));
+        if (empty($item)) continue;
+        
+        if (substr($item, 0, 1) === '[' && substr($item, -1) === ']') {
+            $decoded = json_decode($item, true);
+            if (is_array($decoded)) {
+                $result = array_merge($result, cop_flatten_escape_elements($decoded));
+                continue;
+            }
+        }
+        
+        if (strpos($item, "\n") !== false) {
+            $lines = explode("\n", $item);
+            $result = array_merge($result, cop_flatten_escape_elements($lines));
+            continue;
+        }
+        
+        $result[] = $item;
+    }
+    
+    return array_values(array_unique(array_filter($result)));
+}
+
 // Post meta
 function custom_meta_box()
 {
@@ -775,35 +806,6 @@ function save_custom_meta_box($post_id)
     if (isset($_POST['tags_selector'])) {
         update_post_meta($post_id, 'tags_selector', sanitize_text_field($_POST['tags_selector']));
     }
-function cop_flatten_escape_elements($input) {
-    $result = array();
-    if (empty($input)) return $result;
-    
-    $items = is_array($input) ? $input : array($input);
-    foreach ($items as $item) {
-        if (!is_string($item)) continue;
-        $item = trim(wp_unslash($item));
-        if (empty($item)) continue;
-        
-        if (substr($item, 0, 1) === '[' && substr($item, -1) === ']') {
-            $decoded = json_decode($item, true);
-            if (is_array($decoded)) {
-                $result = array_merge($result, cop_flatten_escape_elements($decoded));
-                continue;
-            }
-        }
-        
-        if (strpos($item, "\n") !== false) {
-            $lines = explode("\n", $item);
-            $result = array_merge($result, cop_flatten_escape_elements($lines));
-            continue;
-        }
-        
-        $result[] = $item;
-    }
-    
-    return array_values(array_unique(array_filter($result)));
-}
 
     // Save escape_elements as JSON array (from Pill Manager hidden inputs)
     if (isset($_POST['escape_elements']) && (is_array($_POST['escape_elements']) || is_string($_POST['escape_elements']))) {
