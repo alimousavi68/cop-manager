@@ -323,8 +323,14 @@ function cop_ajax_suggest_escape_elements() {
     }
 
     $url = esc_url_raw($_POST['sample_url']);
+    $body_selector = isset($_POST['body_selector']) ? sanitize_text_field(wp_unslash($_POST['body_selector'])) : '';
+
     if (empty($url)) {
         wp_send_json_error(array('message' => 'آدرس نمونه خالی است.'));
+    }
+
+    if (empty($body_selector)) {
+        wp_send_json_error(array('message' => 'لطفاً ابتدا Body Selector (سلکتور بدنه خبر) را وارد یا انتخاب کنید تا آنالیز المان‌های مزاحم درون آن انجام شود.'));
     }
 
     $html = cop_fetch_html_for_assistant($url);
@@ -338,15 +344,30 @@ function cop_ajax_suggest_escape_elements() {
     libxml_clear_errors();
     $xpath = new DOMXPath($dom);
 
+    // پیدا کردن نود بدنه اصلی خبر
+    $body_xpath_query = cop_css_to_xpath($body_selector);
+    if (empty($body_xpath_query)) {
+        wp_send_json_error(array('message' => 'فرمت Body Selector وارد شده نامعتبر است.'));
+    }
+
+    $body_nodes = @$xpath->query($body_xpath_query);
+    if (!$body_nodes || $body_nodes->length === 0) {
+        wp_send_json_error(array('message' => 'المان بدنه خبر با سلکتور "' . esc_html($body_selector) . '" در این صفحه پیدا نشد. ابتدا از صحّت سلکتور بدنه خبر مطمئن شوید.'));
+    }
+
+    $body_node = $body_nodes->item(0);
     $candidates = array();
 
     /**
-     * Helper: add a candidate if the selector finds at least one element
+     * Helper: add a candidate if the selector finds at least one element WITHIN body_node
      */
-    $add_if_found = function($selector, $label, $reason, $confidence) use (&$candidates, $xpath) {
+    $add_if_found = function($selector, $label, $reason, $confidence) use (&$candidates, $xpath, $body_node) {
         $xp = cop_css_to_xpath($selector);
         if (empty($xp)) return;
-        $nodes = @$xpath->query($xp);
+
+        // کوئری نسبی فقط درون نود بدنه خبر
+        $relative_xp = (strpos($xp, '//') === 0) ? '.' . $xp : './/' . ltrim($xp, '/');
+        $nodes = @$xpath->query($relative_xp, $body_node);
         if ($nodes && $nodes->length > 0) {
             $candidates[] = array(
                 'selector'   => $selector,
@@ -474,14 +495,14 @@ function cop_ajax_suggest_escape_elements() {
 
     // ─────────────────────────────────────────────
     // Strategy 8: پویای DOM — Class/ID Keyword Scan
-    // بررسی تمام المان‌های DOM برای کلاس/ID‌های مشکوک
+    // بررسی فقط المان‌های درون بدنه خبر برای کلاس/ID‌های مشکوک
     // ─────────────────────────────────────────────
     $noise_keywords = array('ad', 'ads', 'adv', 'advert', 'sponsor', 'promo', 'banner',
-        'popup', 'modal', 'overlay', 'widget', 'sidebar', 'footer', 'header',
+        'popup', 'modal', 'overlay', 'widget', 'sidebar',
         'recommend', 'suggest', 'related', 'share', 'social', 'print', 'tag-cloud',
         'تبلیغ', 'بنر', 'مرتبط', 'پیشنهاد', 'اشتراک');
 
-    $all_elements = @$xpath->query('//*[@class or @id]');
+    $all_elements = @$xpath->query('.//*[@class or @id]', $body_node);
     $found_selectors = array();
     if ($all_elements) {
         foreach ($all_elements as $el) {

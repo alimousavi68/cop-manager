@@ -477,17 +477,28 @@ function display_custom_meta_box($post)
         $('#cop_btn_suggest_escape').on('click', function(e) {
             e.preventDefault();
             var sampleUrl = $('#cop_sample_url').val();
+            var bodySelector = $('#body_selector').val();
+
             if (!sampleUrl) {
                 alert('لطفاً ابتدا آدرس یک خبر نمونه را در کادر دستیار بالا وارد کنید.');
                 return;
             }
+
+            if (!bodySelector) {
+                alert('لطفاً ابتدا Body Selector (سلکتور بدنه خبر) را مشخص کنید تا المان‌های درون آن آنالیز شوند.');
+                $('#body_selector').focus().css('background', '#fef2f2');
+                setTimeout(function() { $('#body_selector').css('background', '#fff'); }, 2000);
+                return;
+            }
+
             var $btn = $(this);
-            $btn.prop('disabled', true).html('<svg style="width:14px;height:14px;animation:spin 1s linear infinite" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> در حال تحلیل...');
+            $btn.prop('disabled', true).html('<svg style="width:14px;height:14px;animation:spin 1s linear infinite" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg> در حال تحلیل بدنه...');
             $('#cop-escape-suggest-wrapper').hide();
 
             $.post(ajaxurl, {
                 action: 'cop_suggest_escape_elements',
                 sample_url: sampleUrl,
+                body_selector: bodySelector,
                 security: '<?php echo wp_create_nonce("cop_selector_assistant_nonce"); ?>'
             }, function(response) {
                 $btn.prop('disabled', false).html('<svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z"/></svg> پیشنهاد هوشمند');
