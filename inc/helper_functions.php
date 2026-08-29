@@ -610,11 +610,20 @@ function cop_parse_single_css_part($part) {
         }
     }
 
-    // Parse attributes like [itemprop="value"]
-    if (preg_match_all('/\[([a-zA-Z\-]+)=["\']?([^"\'\]]+)["\']?\]/', $part, $matches)) {
+    // Parse attributes like [itemprop="value"] or [id*="advert"]
+    if (preg_match_all('/\[([a-zA-Z\-]+)([*^$]?)=["\']?([^"\'\]]+)["\']?\]/', $part, $matches)) {
         foreach ($matches[1] as $i => $attr) {
-            $val = $matches[2][$i];
-            $conditions[] = "@$attr='$val'";
+            $op = $matches[2][$i];
+            $val = $matches[3][$i];
+            if ($op === '*') {
+                $conditions[] = "contains(@$attr, '$val')";
+            } elseif ($op === '^') {
+                $conditions[] = "starts-with(@$attr, '$val')";
+            } elseif ($op === '$') {
+                $conditions[] = "contains(@$attr, '$val')"; // XPath 1.0 doesn't have ends-with, use contains as fallback
+            } else {
+                $conditions[] = "@$attr='$val'";
+            }
         }
     }
     
