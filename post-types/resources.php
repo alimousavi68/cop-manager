@@ -71,10 +71,7 @@ function cop_flatten_escape_elements($input) {
         }
         if (!is_string($item)) continue;
         
-        $item = trim(wp_unslash($item));
-        $item = html_entity_decode($item, ENT_QUOTES, 'UTF-8');
-        $item = trim($item, "'\" \t\n\r\0\x0B");
-        if (empty($item)) continue;
+        $item = trim($item);
         
         if (substr($item, 0, 1) === '[' && substr($item, -1) === ']') {
             $decoded = json_decode($item, true);
@@ -82,10 +79,12 @@ function cop_flatten_escape_elements($input) {
                 $result = array_merge($result, cop_flatten_escape_elements($decoded));
                 continue;
             }
-            // If json_decode fails, it is likely a CSS attribute selector like [class*="ad"], not a JSON array.
-            $result[] = $item;
-            continue;
         }
+        
+        $item = wp_unslash($item);
+        $item = html_entity_decode($item, ENT_QUOTES, 'UTF-8');
+        $item = trim($item, "'\" \t\n\r\0\x0B");
+        if (empty($item)) continue;
         
         if (strpos($item, "\n") !== false) {
             $lines = explode("\n", $item);
